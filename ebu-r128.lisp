@@ -165,88 +165,117 @@
 ;; DC gain is 12 dB to make up for insertion of zeros
 
 (defvar *ph0*
-  '(0.0017089843750d0
-    0.0109863281250d0
-    -0.0196533203125d0
-    0.0332031250000d0
-    -0.0594482421875d0
-    0.1373291015625d0
-    0.9721679687500d0
-    -0.1022949218750d0
-    0.0476074218750d0
-    -0.0266113281250d0
-    0.0148925781250
-    -0.0083007812500d0))
+  (make-array 12
+              :element-type 'single-float
+              :initial-contents
+              (mapcar (um:rcurry 'float 1e0)
+                      (reverse
+                       '(0.0017089843750d0
+                        0.0109863281250d0
+                        -0.0196533203125d0
+                        0.0332031250000d0
+                        -0.0594482421875d0
+                        0.1373291015625d0
+                        0.9721679687500d0
+                        -0.1022949218750d0
+                        0.0476074218750d0
+                        -0.0266113281250d0
+                        0.0148925781250
+                        -0.0083007812500d0)))))
 
 (defvar *ph1*
-  '(-0.0291748046875d0
-    0.0292968750000d0
-    -0.0517578125000d0
-    0.0891113281250d0
-    -0.1665039062500d0
-    0.4650878906250d0
-    0.7797851562500d0
-    -0.2003173828125d0
-    0.1015625000000d0
-    -0.0582275390625d0
-    0.0330810546875d0
-    -0.0189208984375d0))
-
+  (make-array 12
+              :element-type 'single-float
+              :initial-contents
+              (mapcar (um:rcurry 'float 1e0)
+                      (reverse
+                       '(-0.0291748046875d0
+                         0.0292968750000d0
+                         -0.0517578125000d0
+                         0.0891113281250d0
+                         -0.1665039062500d0
+                         0.4650878906250d0
+                         0.7797851562500d0
+                         -0.2003173828125d0
+                         0.1015625000000d0
+                         -0.0582275390625d0
+                         0.0330810546875d0
+                         -0.0189208984375d0)))))
+              
 (defvar *ph2*
-  '(-0.0189208984375d0
-    0.0330810546875d0
-    -0.0582275390625d0
-    0.1015625000000d0
-    -0.2003173828125d0
-    0.7797851562500d0
-    0.4650878906250d0
-    -0.1665039062500d0
-    0.0891113281250d0
-    -0.0517578125000d0
-    0.0292968750000d0
-    -0.0291748046875d0))
+  (make-array 12
+              :element-type 'single-float
+              :initial-contents  
+              (mapcar (um:rcurry 'float 1e0)
+                      (reverse
+                       '(-0.0189208984375d0
+                         0.0330810546875d0
+                         -0.0582275390625d0
+                         0.1015625000000d0
+                         -0.2003173828125d0
+                         0.7797851562500d0
+                         0.4650878906250d0
+                         -0.1665039062500d0
+                         0.0891113281250d0
+                         -0.0517578125000d0
+                         0.0292968750000d0
+                         -0.0291748046875d0)))))
 
 (defvar *ph3*
-  '(-0.0083007812500d0
-    0.0148925781250d0
-    -0.0266113281250d0
-    0.0476074218750d0
-    -0.1022949218750d0
-    0.9721679687500d0
-    0.1373291015625d0
-    -0.0594482421875d0
-    0.0332031250000d0
-    -0.0196533203125d0
-    0.0109863281250d0
-    0.0017089843750d0))
+  (make-array 12
+              :element-type 'single-float
+              :initial-contents
+              (mapcar (um:rcurry 'float 1e0)
+                      (reverse
+                       '(-0.0083007812500d0
+                         0.0148925781250d0
+                         -0.0266113281250d0
+                         0.0476074218750d0
+                         -0.1022949218750d0
+                         0.9721679687500d0
+                         0.1373291015625d0
+                         -0.0594482421875d0
+                         0.0332031250000d0
+                         -0.0196533203125d0
+                         0.0109863281250d0
+                         0.0017089843750d0)))))
 
 #|
-(let* ((x  (loop for x0 in *ph0*
-                 for x1 in *ph1*
-                 for x2 in *ph2*
-                 for x3 in *ph3*
+(let* ((x  (loop for x0 across (reverse *ph0*)
+                 for x1 across (reverse *ph1*)
+                 for x2 across (reverse *ph2*)
+                 for x3 across (reverse *ph3*)
                  collect x0
                  collect x1
                  collect x2
                  collect x3))
-       (fs   (mapcar (rcurry '* 192/32) (iramp 32)))
+       (fs   (map 'vector (rcurry '* 192/32) (iramp 32)))
        (fdb  (fft:fwd-magnitude-db (coerce x 'vector))))
   (plt:plot 'plt x :clear t)
   (plt:plot 'fplt fs fdb :clear t))
 |#
 
-(defparameter *bufl* (make-array 24 :initial-element 0))
-(defparameter *bufr* (make-array 24 :initial-element 0))
+(defparameter *bufl*
+  (make-array 24
+              :element-type 'single-float
+              :initial-element 0e0))
+(defparameter *bufr*
+  (make-array 24
+              :element-type 'single-float
+              :initial-element 0e0))
 (defparameter *bix* 0)
 (defparameter *phs*
-  (list (reverse *ph0*)
-        (reverse *ph1*)
-        (reverse *ph2*)
-        (reverse *ph3*)))
+  (list *ph0*
+        *ph1*
+        *ph2*
+        *ph3*))
 
 (defun fir-ph-filt (coffs &optional (buf *bufl*))
-  (loop for c in coffs
-        for jx from *bix*
+  #F
+  (declare (type (array single-float (*)) coffs)
+           (type (array single-float (*)) buf))
+  (loop for c across coffs
+        for jx fixnum from *bix*
         sum (* (aref buf *bix*) c)))
 
 (defun fir-filt-samp (x &optional (buf *bufl*))
@@ -259,6 +288,9 @@
         (setf *bix* 0))))
 
 (defun fir-maxabs-samp (x &optional (buf *bufl*))
+  #F
+  (declare (type (array single-float (*)) buf)
+           (type single-float x))
   (setf (aref buf *bix*) x
         (aref buf (+ *bix* 12)) x)
   (prog1
@@ -299,9 +331,10 @@
          (fir-maxabs-samp x))))
           
 #|
-(let* ((x  (append '(-1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
-                        1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1)
-                   (make-list 64 :initial-element -1)))
+(let* ((x  (mapcar (um:rcurry 'float 1e0)
+                   (append '(-1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+                                1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1)
+                           (make-list 64 :initial-element -1))))
        (xmax (true-peak x))
        (y  (fir-filt-list x)))
   (plt:plot 'yplt y :clear t)
@@ -339,58 +372,84 @@
 |#
 
 (defvar *itu-filter*)
+(defvar *itu-db-corr*)
 
 (defvar *itu-stateL*
-  (make-array 6 :initial-element 0.0))
+  (make-array 6
+              :element-type 'single-float
+              :initial-element 0e0))
 
 (defvar *itu-stateR*
-  (make-array 6 :initial-element 0.0))
+  (make-array 6
+              :element-type 'single-float
+              :initial-element 0e0))
 
 (defun init-itu-filter (fs)
-  (setf *itu-filter*
-        (coerce (append (hishelf 4 (/ 1.5 fs)    0.707)
-                        (hpf       (/ 0.0375 fs) 0.5))
-                'vector))
-  (fill *itu-stateL* 0.0)
-  (fill *itu-stateR* 0.0)
-  (fill *bufl* 0.0)
-  (fill *bufr* 0.0))
-
+  (let* ((hpf  (hpf       (/ 0.0375 fs) 0.5))
+         (hsh  (hishelf 4 (/ 1.5 fs)    0.707))
+         (coffs (make-array 10
+                            :element-type     'single-float
+                            :initial-contents
+                            (mapcar (um:rcurry 'float 1e0)
+                                    (append hpf hsh)))))
+    (setf *itu-filter* coffs
+          *itu-db-corr* (- (+ (db-filt 1 hsh fs)
+                              (db-filt 1 hpf fs))))
+    (fill *itu-stateL* 0e0)
+    (fill *itu-stateR* 0e0)
+    (fill *bufl* 0e0)
+    (fill *bufr* 0e0)))
+  
 (init-itu-filter 48)
 
-(defvar *itu-db-corr*
-  (- (+ (db-filt 1 (hishelf 4 (/ 1.5 48) 0.707) 48)
-        (db-filt 1 (hpf       (/ 0.0375 48) 0.5) 48))))
-
 (defun itu-filt1 (state v)
+  #F
+  (declare (type (array single-float (6)) state)
+           (type single-float v))
   (let ((coeffs *itu-filter*))
-    (labels ((filter1 (v six cix)
-               (let ((y (+ (* v                      (aref coeffs (+ cix 2)))
+    (declare (type (array single-float (10)) coeffs))
+    (labels ((filter1 (x six cix)
+               (declare (type fixnum six cix)
+                        (type single-float x))
+               (let ((y (+ (* x                      (aref coeffs (+ cix 2)))
                            (* (aref state (+ six 0)) (aref coeffs (+ cix 3)))
                            (* (aref state (+ six 1)) (aref coeffs (+ cix 4)))
                            (* (aref state (+ six 2)) (aref coeffs (+ cix 0)))
                            (* (aref state (+ six 3)) (aref coeffs (+ cix 1))))))
-                 (shiftf (aref state (+ six 1)) (aref state (+ six 0)) v)
+                 (shiftf (aref state (+ six 1)) (aref state (+ six 0)) x)
                  y)))
       (let* ((y (filter1 v 0 0))
              (z (filter1 y 2 5)))
+        (declare (type single-float y z))
         (shiftf (aref state 5) (aref state 4) z)
         z))))
 
-(defun itu-filt (buf)
+(defstruct itu-filt-result
+  tpl rss)
+
+(defun itu-filt (buf ans)
+  #F
+  (declare (type (array single-float (*)) buf))
   (let* ((nel (length buf))
-         (sf  (/ 2 nel)))
-    (list (max (loop for ix from 0 below nel by 2 maximize
-                     (fir-maxabs-samp (aref buf ix) *bufl*))
-               (loop for ix from 1 below nel by 2 maximize
-                     (fir-maxabs-samp (aref buf ix) *bufr*)))
+         (sf  (/ 2.0 nel)))
+    (declare (type fixnum nel)
+             (type single-float sf))
+    (setf (itu-filt-result-tpl ans)
+          (float
+           (max (loop for ix fixnum from 0 below nel by 2 maximize
+                      (fir-maxabs-samp (aref buf ix) *bufl*))
+                (loop for ix fixnum from 1 below nel by 2 maximize
+                      (fir-maxabs-samp (aref buf ix) *bufr*)))
+           1e0)
           
+          (itu-filt-result-rss ans)
           (* sf
-             (loop for ix from 0 below nel by 2
-                   for jx from 1 by 2
+             (loop for ix fixnum from 0 below nel by 2
+                   for jx fixnum from 1 by 2
                    sum
                    (let ((yl (itu-filt1 *itu-statel* (aref buf ix)))
                          (yr (itu-filt1 *itu-stater* (aref buf jx))))
+                     (declare (type single-float yl yr))
                      (+ (* yl yl)
                         (* yr yr)))))
           )))
@@ -633,6 +692,7 @@
                             ,@body)))
 
 (defmethod make-wave-data-getter ((wf wave-file) nsamp &key dst)
+  #F
   (with-accessors ((bps    wave-file-bits-per-sample)
                    (nchan  wave-file-nchan)
                    (endian wave-file-endian)
@@ -692,6 +752,7 @@
   (float (* 0.1 (round v 0.1)) 1e0))
 
 (defun itu-rating (&optional fname)
+  #F
   (with-wav-file (wf fname)
     (with-accessors ((nsamp  wave-file-nsamp)
                      (nch    wave-file-nchan)
@@ -700,13 +761,15 @@
       (let* ((ns100 (round (* 0.1 fsamp)))
              (data  (make-array (* 2 ns100)
                                 :element-type 'single-float))
-             (tp    -100)
+             (tp       0)
              (prms     0)
              (nblk     0)
              (rms4    (make-array 4
+                                  :element-type 'single-float
                                   :initial-element 0.0))
              (rms4ix   0)
              (rms30   (make-array 30
+                                  :element-type 'single-float
                                   :initial-element 0.0))
              (rms30ix 0)
              (hist    (make-array (truncate nsamp fsamp)
@@ -714,26 +777,29 @@
                                   :adjustable      t
                                   :fill-pointer    0))
              (pk      0)
-             (wget    (make-wave-data-getter wf ns100 :dst data)))
+             (wget    (make-wave-data-getter wf ns100 :dst data))
+             (iir-ans (make-itu-filt-result)))
         (assert (= nch 2)) ;; only interested in stereo music files
         (init-itu-filter (/ fsamp 1000))
         (do ((ns  nsamp  (- ns ns100)))
             ((> ns100 ns))
-          (destructuring-bind (tpx rms) (itu-filt (funcall wget))
-            (setf tp  (max tp tpx)
-                  (aref rms30 rms30ix)  rms
+          (itu-filt (funcall wget) iir-ans)
+          (with-accessors ((rss itu-filt-result-rss)
+                           (tpl itu-filt-result-tpl)) iir-ans
+            (setf tp  (max tp tpl)
+                  (aref rms30 rms30ix)  rss
                   rms30ix  (mod (1+ rms30ix) 30)
-                  (aref rms4 rms4ix)    rms
+                  (aref rms4 rms4ix)    rss
                   rms4ix   (mod (1+ rms4ix)   4))
             (let ((avg30 (/ (reduce '+ rms30) 30))
                   (avg4  (/ (reduce '+ rms4)   4)))
               ;; collect 3 sec windows for PR
-              (when (> avg30 1e-7)
+              (when (> avg30 1e-7) ;; -70 dBFS absolute thresh
                 (setf pk (max pk avg30))
                 (when (zerop (mod rms30ix 10))
                   (vector-push-extend (float avg30 1e0) hist)))
               ;; collect 400 ms windows for PL
-              (when (and (> avg4 1e-7)
+              (when (and (> avg4 1e-7)  ;; -70 dBFS absolute thresh
                          (> avg4 (* 0.1 prms))) ;; -10 dB relative thresh
                 (setf prms (/ (+ avg4 (* prms nblk))
                               (incf nblk))))
