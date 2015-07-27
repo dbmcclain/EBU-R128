@@ -849,6 +849,6 @@
     (when files
       (mapcar (lambda (file)
                 (print file)
-                (itu-rating file))
+                (r128-rating file))
               files))))
 
