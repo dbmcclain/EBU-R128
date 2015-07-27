@@ -21,21 +21,26 @@
   ;;
   ;; H(z) = (b0 + b1/z + b2/z^2) / (1 - a1/z - a2/z^2)
   ;;
-  '(1.69065929318241d0
-    -0.73248077421585d0
-    1.53512485958697d0
-    -2.69169618940638d0
-    1.19839281085285d0))
+  (destructuring-bind (a1 a2 b0 b1 b2)
+      '(1.69065929318241d0
+        -0.73248077421585d0
+        1.53512485958697d0
+        -2.69169618940638d0
+        1.19839281085285d0)
+    (list b0 b1 b2 a1 a2)))
 
 (defvar *f2*
-  '(1.99004745483398d0
-    -0.99007225036621d0
-    1d0
-    -2d0
-    1d0))
+  (destructuring-bind (a1 a2 b0 b1 b2)
+      '(1.99004745483398d0
+        -0.99007225036621d0
+        1d0
+        -2d0
+        1d0)
+    (list b0 b1 b2 a1 a2)))
+    
 
 (defun iir (f filt)
-  (destructuring-bind (a1 a2 b0 b1 b2) filt
+  (destructuring-bind (b0 b1 b2 a1 a2) filt
     (let* ((1/z (cis (* -2 pi f))))
       (/ (+ b0
             (* b1 1/z)
@@ -72,12 +77,13 @@
          (b2 (* a (+ (+ a 1)
                      (* (- a 1) cw0)
                      (* -2 (sqrt a) alpha)))))
-    (list (- (/ a1 a0))
-          (- (/ a2 a0))
-          (/ b0 a0)
+    (list (/ b0 a0)
           (/ b1 a0)
-          (/ b2 a0))))
-
+          (/ b2 a0)
+          (- (/ a1 a0))
+          (- (/ a2 a0)))
+    ))
+          
 
 (defun hpf (f0 q)
   (let* ((w0    (* 2 pi f0))
@@ -89,12 +95,13 @@
          (b0    (/ (+ 1 cw0) 2))
          (b1    (- (+ 1 cw0)))
          (b2    (/ (+ 1 cw0) 2)))
-    (list (- (/ a1 a0))
-          (- (/ a2 a0))
-          (/ b0 a0)
+    (list (/ b0 a0)
           (/ b1 a0)
-          (/ b2 a0))))
-
+          (/ b2 a0)
+          (- (/ a1 a0))
+          (- (/ a2 a0)))
+    ))
+          
 #|
 (progn
   (plt:fplot 'filt '(0.01 20) (rcurry 'db-filt *f1* 48)
@@ -270,6 +277,11 @@
         *ph2*
         *ph3*))
 
+(defun fir-init ()
+  (fill *bufl* 0e0)
+  (fill *bufr* 0e0)
+  (setf *bix*  0))
+
 (defun fir-ph-filt (coffs &optional (buf *bufl*))
   (declare (optimize (speed 3)
                      (safety 0)
@@ -340,7 +352,9 @@
                                 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1)
                            (make-list 64 :initial-element -1))))
        (xmax (true-peak x))
-       (y  (fir-filt-list x)))
+       (y    (progn
+               (fir-init)
+               (fir-filt-list x))))
   (plt:plot 'yplt y :clear t)
   (list xmax
         (db20 (reduce 'max y))
@@ -401,8 +415,7 @@
                               (db-filt 1 hpf fs))))
     (fill *itu-stateL* 0e0)
     (fill *itu-stateR* 0e0)
-    (fill *bufl* 0e0)
-    (fill *bufr* 0e0)))
+    (fir-init)))
   
 (init-itu-filter 48)
 
@@ -417,11 +430,11 @@
     (labels ((filter1 (x six cix)
                (declare (type fixnum six cix)
                         (type single-float x))
-               (let ((y (+ (* x                      (aref coeffs (+ cix 2)))
-                           (* (aref state (+ six 0)) (aref coeffs (+ cix 3)))
-                           (* (aref state (+ six 1)) (aref coeffs (+ cix 4)))
-                           (* (aref state (+ six 2)) (aref coeffs (+ cix 0)))
-                           (* (aref state (+ six 3)) (aref coeffs (+ cix 1))))))
+               (let ((y (+ (* x                      (aref coeffs (+ cix 0)))
+                           (* (aref state (+ six 0)) (aref coeffs (+ cix 1)))
+                           (* (aref state (+ six 1)) (aref coeffs (+ cix 2)))
+                           (* (aref state (+ six 2)) (aref coeffs (+ cix 3)))
+                           (* (aref state (+ six 3)) (aref coeffs (+ cix 4))))))
                  (shiftf (aref state (+ six 1)) (aref state (+ six 0)) x)
                  y)))
       (let* ((y (filter1 v 0 0))
@@ -761,7 +774,7 @@
 (defun rnd1 (v)
   (float (* 0.1 (round v 0.1)) 1e0))
 
-(defun itu-rating (&optional fname)
+(defun r128-rating (&optional fname)
   (declare (optimize (speed 3)
                      (safety 0)
                      (float 0)))
@@ -829,9 +842,10 @@
              :pr   (rnd1 (- (rmsdb pk) pl))
              )))))))
 
-(defun itu-ratings ()
-  (let* ((files (capi:prompt-for-files "Select Album Files"
-                                       :filter "*.wav;*.aif;*.aiff")))
+(defun r128-ratings (&optional files)
+  (let* ((files (or files
+                    (capi:prompt-for-files "Select Album Files"
+                                           :filter "*.wav;*.aif;*.aiff"))))
     (when files
       (mapcar (lambda (file)
                 (print file)
