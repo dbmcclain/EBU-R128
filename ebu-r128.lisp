@@ -271,7 +271,9 @@
         *ph3*))
 
 (defun fir-ph-filt (coffs &optional (buf *bufl*))
-  #F
+  (declare (optimize (speed 3)
+                     (safety 0)
+                     (float 0)))
   (declare (type (array single-float (*)) coffs)
            (type (array single-float (*)) buf))
   (loop for c across coffs
@@ -288,7 +290,9 @@
         (setf *bix* 0))))
 
 (defun fir-maxabs-samp (x &optional (buf *bufl*))
-  #F
+  (declare (optimize (speed 3)
+                     (safety 0)
+                     (float 0)))
   (declare (type (array single-float (*)) buf)
            (type single-float x))
   (setf (aref buf *bix*) x
@@ -403,7 +407,9 @@
 (init-itu-filter 48)
 
 (defun itu-filt1 (state v)
-  #F
+  (declare (optimize (speed 3)
+                     (safety 0)
+                     (float 0)))
   (declare (type (array single-float (6)) state)
            (type single-float v))
   (let ((coeffs *itu-filter*))
@@ -428,7 +434,9 @@
   tpl rss)
 
 (defun itu-filt (buf ans)
-  #F
+  (declare (optimize (speed 3)
+                     (safety 0)
+                     (float 0)))
   (declare (type (array single-float (*)) buf))
   (let* ((nel (length buf))
          (sf  (/ 2.0 nel)))
@@ -692,7 +700,9 @@
                             ,@body)))
 
 (defmethod make-wave-data-getter ((wf wave-file) nsamp &key dst)
-  #F
+  (declare (optimize (speed 3)
+                     (safety 0)
+                     (float 0)))
   (with-accessors ((bps    wave-file-bits-per-sample)
                    (nchan  wave-file-nchan)
                    (endian wave-file-endian)
@@ -752,7 +762,9 @@
   (float (* 0.1 (round v 0.1)) 1e0))
 
 (defun itu-rating (&optional fname)
-  #F
+  (declare (optimize (speed 3)
+                     (safety 0)
+                     (float 0)))
   (with-wav-file (wf fname)
     (with-accessors ((nsamp  wave-file-nsamp)
                      (nch    wave-file-nchan)
