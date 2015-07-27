@@ -25,8 +25,8 @@ Example:
 No restrictions are placed on this code.
 
 References:
-	ITU-R BS.1770-3 Algorithms for Audio Measurements
- 	EBU-Tech 3343 Implementation of R128
+- ITU-R BS.1770-3 Algorithms for Audio Measurements
+- EBU-Tech 3343 Implementation of R128
 
 - David McClain
 - Refined Audiometrics Laboratory, LLC
