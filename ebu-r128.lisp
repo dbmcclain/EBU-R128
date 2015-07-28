@@ -495,6 +495,9 @@
 (defun rnd1 (v)
   (sfloat (* 0.1 (round v 0.1))))
 
+(if (find-package :plotter)
+    (pushnew :has-plotter *features*))
+
 (defstruct r128-state
   fname
   (tp    0.0)
@@ -512,18 +515,45 @@
                    (pk    r128-state-pk)
                    (hist  r128-state-hist)
                    (fname r128-state-fname)) state
-    
+
     (destructuring-bind (p10 p95)
         (percentiles '(0.10 0.95)  ;; -20 dB rel gate
                      (remove-if (rcurry '< (* 0.01 prms)) hist))
-      (let* ((pl (rmsdb prms)))
+      (let* ((shist (map 'vector (lambda (rss)
+                                   (+ 23.0 (rmsdb rss)))
+                         hist))
+             (p95lu (+ 23.0 (rmsdb p95)))
+             (p10lu (+ 23.0 (rmsdb p10)))
+             (pl    (rmsdb prms)))
+
+        #+:has-plotter
+        (progn
+          (plt:plot 's-record shist
+                    :clear t
+                    :yrange `(-18 ,(max 9 (reduce 'max shist)))
+                    :title "Short Term (3s) History"
+                    :xtitle "Time [s]"
+                    :ytitle "Loudness [LU]")
+          (plt:plot 's-record '(0 0) `(,p10lu ,p95lu)
+                    :color :orange
+                    :thick 5)
+          (plt:histogram 's-histo shist
+                         :clear t
+                         :title "Short Term (3s) Histogram"
+                         :xtitle "Loudness [LU]"
+                         :ytitle "Counts")
+          (plt:plot 's-histo `(,p10lu ,p95lu) '(0 0)
+                    :color :orange
+                    :thick 5))
+        
         (list
          :file fname
          :tpl  (rnd1 (db20 tp))
          :pl   (rnd1 pl)
-         :lu23 (rnd1 (- pl -23))
-         :lra  (rnd1 (- (rmsdb p95) (rmsdb p10)))
+         :lu23 (rnd1 (- pl -23.0))
+         :lra  (rnd1 (- p95lu p10lu))
          :pr   (rnd1 (- (rmsdb pk) pl))
+         :hist shist
          )))))
   
 (defun update-r128-state (state tpl avg4 avg30 1secp)
@@ -593,6 +623,7 @@
                                (/ (reduce '+ rms30) 30.0) ;; 3 s sliding window
                                (zerop (mod rms30ix 10)))
             ))
+        (r128-summary state) ;; provide a walking visual summary
         state
         ))))
 
