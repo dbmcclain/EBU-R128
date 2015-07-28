@@ -1,4 +1,7 @@
 
+(when (find-package :plotter)
+  (pushnew :has-plotter *features*))
+
 (asdf:defsystem "ebu-r128"
   :description "ebu-r128: a batch EBU-R128 audio measurement tool"
   :version     "1.0"

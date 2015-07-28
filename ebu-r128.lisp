@@ -495,9 +495,6 @@
 (defun rnd1 (v)
   (sfloat (* 0.1 (round v 0.1))))
 
-(if (find-package :plotter)
-    (pushnew :has-plotter *features*))
-
 (defstruct r128-state
   fname
   (tp    0.0)
