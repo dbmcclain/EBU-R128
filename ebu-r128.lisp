@@ -290,16 +290,29 @@
            (type (array single-float (*)) buf))
   (loop for c across coffs
         for jx fixnum from *bix*
-        sum (* (aref buf *bix*) c)))
+        sum (* (aref buf jx) c)))
+
+(defun store-fir-sample (x buf)
+  (declare (optimize (speed 3)
+                     (safety 0)
+                     (float 0)))
+  (declare (type (array single-float (*)) buf)
+           (type single-float x))
+  (decf *bix*)
+  (if (minusp *bix*)
+      (setf *bix* 11))
+  (setf (aref buf *bix*) x
+        (aref buf (+ *bix* 12)) x))
 
 (defun fir-filt-samp (x &optional (buf *bufl*))
-  (setf (aref buf *bix*) x
-        (aref buf (+ *bix* 12)) x)
-  (prog1
-      (loop for ph in *phs*
-            collect (fir-ph-filt ph buf))
-    (if (>= (incf *bix*) 12)
-        (setf *bix* 0))))
+  (declare (optimize (speed 3)
+                     (safety 0)
+                     (float 0)))
+  (declare (type (array single-float (*)) buf)
+           (type single-float x))
+  (store-fir-sample x buf)
+  (loop for ph in *phs*
+        collect (fir-ph-filt ph buf)))
 
 (defun fir-maxabs-samp (x &optional (buf *bufl*))
   (declare (optimize (speed 3)
@@ -307,13 +320,9 @@
                      (float 0)))
   (declare (type (array single-float (*)) buf)
            (type single-float x))
-  (setf (aref buf *bix*) x
-        (aref buf (+ *bix* 12)) x)
-  (prog1
-      (loop for ph in *phs*
-            maximize (abs (fir-ph-filt ph buf)))
-    (if (>= (incf *bix*) 12)
-        (setf *bix* 0))))
+  (store-fir-sample x buf)
+  (loop for ph in *phs*
+        maximize (abs (fir-ph-filt ph buf))))
 
 (defun fir-filt-list (lst)
   (let ((ans (make-array (* 4 (length lst))
@@ -487,54 +496,79 @@
 ;; ------------------------------------------------
 
 (defun extract-ule (vec start ixstart)
+  (declare (optimize (speed 3)
+                     (safety 0)
+                     (float 0)))
+  (declare (type (array (unsigned-byte 8) (*)) vec)
+           (type fixnum start ixstart))
   (do ((val 0)
        (ix ixstart (1- ix)))
       ((minusp ix) val)
+    (declare (type fixnum val ix))
     (setf val (logior (ash val 8)
                       (aref vec (+ start ix))))))
     
 (defun extract-ube (vec start ixstop)
+  (declare (optimize (speed 3)
+                     (safety 0)
+                     (float 0)))
+  (declare (type (array (unsigned-byte 8) (*)) vec)
+           (type fixnum start ixstart))
   (do ((val  0)
        (ix   0  (1+ ix)))
       ((>= ix ixstop) val)
+    (declare (type fixnum val ix))
     (setf val (logior (ash val 8)
                       (aref vec (+ start ix))))))
 
 (defun signing-16 (val)
+  (declare (optimize (speed 3)
+                     (safety 0)
+                     (float 0)))
+  (declare (type fixnum val))
   (if (logbitp 15 val)
       (- val #.(ash 1 16))
     val))
 
 (defun signing-24 (val)
+  (declare (optimize (speed 3)
+                     (safety 0)
+                     (float 0)))
+  (declare (type fixnum val))
   (if (logbitp 23 val)
       (- val #.(ash 1 24))
     val))
 
 (defun convert-u32-to-flt32 (val)
+  (declare (optimize (speed 3)
+                     (safety 0)
+                     (float 0)))
+  (declare (type fixnum val))
   (let* ((sgn  (if (zerop (ldb (byte 1 31) val))
                    1
                  -1))
          (exp  (- (ldb (byte 8 23) val) 127 23))
          (mant (* sgn
                   (logior #.(ash 1 23) (ldb (byte 23 0) val)))))
+    (declare (type fixnum sgn exp mant))
     (scale-float (float mant) exp)))
 
 (defun convert-u80-to-flt80 (val)
+  (declare (optimize (speed 3)
+                     (safety 0)
+                     (float 0)))
+  (declare (type integer val))
   (let* ((sgn  (if (zerop (ldb (byte 1 79) val))
                    1
                  -1))
          (exp  (- (ldb (byte 15 64) val) #x4000 62))
          (mant (* sgn
                   (ldb (byte 64 0) val))))
+    (declare (type fixnum sgn exp)
+             (type integer mant))
     (scale-float (float mant 1d0) exp)))
 
 ;; ------------------------------------------------
-
-(defun extract-u32le (vec &optional (start 0))
-  (extract-ule vec start 3))
-
-(defun extract-u32be (vec &optional (start 0))
-  (extract-ube vec start 4))
 
 (defun extract-u16le (vec &optional (start 0))
   (extract-ule vec start 1))
@@ -542,17 +576,25 @@
 (defun extract-u16be (vec &optional (start 0))
   (extract-ube vec start 2))
 
-(defun extract-s16le (vec &optional (start 0))
-  (signing-16 (extract-u16le vec start)))
-
-(defun extract-s16be (vec &optional (start 0))
-  (signing-16 (extract-u16be vec start)))
-
 (defun extract-u24le (vec &optional (start 0))
   (extract-ule vec start 2))
 
 (defun extract-u24be (vec &optional (start 0))
   (extract-ube vec start 3))
+
+(defun extract-u32le (vec &optional (start 0))
+  (extract-ule vec start 3))
+
+(defun extract-u32be (vec &optional (start 0))
+  (extract-ube vec start 4))
+
+;; -----------------------------------------------
+
+(defun extract-s16le (vec &optional (start 0))
+  (signing-16 (extract-u16le vec start)))
+
+(defun extract-s16be (vec &optional (start 0))
+  (signing-16 (extract-u16be vec start)))
 
 (defun extract-s24le (vec &optional (start 0))
   (signing-24 (extract-u24le vec start)))
@@ -746,11 +788,13 @@
                         )))
       (lambda ()
         (read-sequence rawdata f)
+        ;; (user::dump rawdata)
         (loop repeat (* nsamp nchan)
               for ix from 0 by nbs
               for jx from 0
               do
               (setf (aref data jx) (funcall extractor rawdata ix)))
+        ;; (user::dump data)
         data))))
      
 (defmethod get-wave-data ((wf wave-file) nsamp &key dst)
@@ -783,6 +827,7 @@
                      (nch    wave-file-nchan)
                      (fsamp  wave-file-fsamp)
                      (fname  wave-file-fname)) wf
+      (print fname)
       (let* ((ns100 (round (* 0.1 fsamp)))
              (data  (make-array (* 2 ns100)
                                 :element-type 'single-float))
@@ -847,8 +892,6 @@
                     (capi:prompt-for-files "Select Album Files"
                                            :filter "*.wav;*.aif;*.aiff"))))
     (when files
-      (mapcar (lambda (file)
-                (print file)
-                (r128-rating file))
-              files))))
+      (mapcar 'r128-rating files))
+    ))
 
