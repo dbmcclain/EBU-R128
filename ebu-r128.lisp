@@ -674,15 +674,11 @@
         (find-chunk f chunk-magic :endian endian)))
     ))
 
-(defun read-wav-format (f)
-  (let* ((dlen (read-u32le f))
-         (fmt  (make-array dlen
-                           :element-type '(unsigned-byte 8))))
-    (read-sequence fmt f)
-    fmt))
-
-(defun read-aif-format (f)
-  (let* ((dlen (read-u32be f))
+(defun read-audio-format (f &optional (endian :le))
+  (let* ((dlen (case endian
+                 (:le (read-u32le f))
+                 (:be (read-u32be f))
+                 ))
          (fmt  (make-array dlen
                            :element-type '(unsigned-byte 8))))
     (read-sequence fmt f)
@@ -707,7 +703,7 @@
                (read-sequence magic f)
                (assert (string= magic "WAVE"))
                (find-chunk f "fmt ")
-               (let* ((fmt   (read-wav-format f))
+               (let* ((fmt   (read-audio-format f))
                       (nchan (extract-u16le fmt 2))
                       (fsamp (extract-u32le fmt 4))
                       (bits-per-sample (extract-u16le fmt 14)))
@@ -729,7 +725,7 @@
                (let ((endian (cond ((string= magic "AIFF") :be)
                                    ((string= magic "AIFC") :le))))
                  (find-chunk f "COMM" :endian :be)
-                 (let* ((fmt   (read-aif-format f))
+                 (let* ((fmt   (read-audio-format f :be))
                         (nchan (extract-u16be fmt 0))
                         (nsamp (extract-u32be fmt 2))
                         (bits-per-sample (extract-u16be fmt 6))
