@@ -14,6 +14,9 @@
 (defun db20 (x)
   (* 20 (safe-log10 x)))
 
+(defun sfloat (x)
+  (float x 1e0))
+
 ;; ---------------------------------------------------
 ;; ITU K filters for loudness measurement
 (defvar *f1*
@@ -175,7 +178,7 @@
   (make-array 12
               :element-type 'single-float
               :initial-contents
-              (mapcar (um:rcurry 'float 1e0)
+              (mapcar 'sfloat
                       (reverse
                        '(0.0017089843750d0
                         0.0109863281250d0
@@ -194,7 +197,7 @@
   (make-array 12
               :element-type 'single-float
               :initial-contents
-              (mapcar (um:rcurry 'float 1e0)
+              (mapcar 'sfloat
                       (reverse
                        '(-0.0291748046875d0
                          0.0292968750000d0
@@ -213,7 +216,7 @@
   (make-array 12
               :element-type 'single-float
               :initial-contents  
-              (mapcar (um:rcurry 'float 1e0)
+              (mapcar 'sfloat
                       (reverse
                        '(-0.0189208984375d0
                          0.0330810546875d0
@@ -232,7 +235,7 @@
   (make-array 12
               :element-type 'single-float
               :initial-contents
-              (mapcar (um:rcurry 'float 1e0)
+              (mapcar 'sfloat
                       (reverse
                        '(-0.0083007812500d0
                          0.0148925781250d0
@@ -262,16 +265,16 @@
   (plt:plot 'fplt fs fdb :clear t))
 |#
 
-(defparameter *bufl*
+(defvar *bufl*
   (make-array 24
               :element-type 'single-float
               :initial-element 0e0))
-(defparameter *bufr*
+(defvar *bufr*
   (make-array 24
               :element-type 'single-float
               :initial-element 0e0))
-(defparameter *bix* 0)
-(defparameter *phs*
+(defvar *bix* 0)
+(defvar *phs*
   (list *ph3*
         *ph2*
         *ph1*
@@ -299,8 +302,8 @@
   (declare (type (array single-float (*)) buf)
            (type single-float x))
   (decf *bix*)
-  (if (minusp *bix*)
-      (setf *bix* 11))
+  (when (minusp *bix*)
+    (setf *bix* 11))
   (setf (aref buf *bix*) x
         (aref buf (+ *bix* 12)) x))
 
@@ -356,9 +359,9 @@
          (fir-maxabs-samp x))))
           
 #|
-(let* ((x  (mapcar (um:rcurry 'float 1e0)
+(let* ((x  (mapcar 'sfloat
                    (append '(-1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
-                                1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1)
+                                1 -1 -1 -1 -1 -1 -1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1)
                            (make-list 64 :initial-element -1))))
        (xmax (true-peak x))
        (y    (progn
@@ -417,7 +420,7 @@
          (coffs (make-array 10
                             :element-type     'single-float
                             :initial-contents
-                            (mapcar (um:rcurry 'float 1e0)
+                            (mapcar 'sfloat
                                     (append hpf hsh)))))
     (setf *itu-filter* coffs
           *itu-db-corr* (- (+ (db-filt 1 hsh fs)
@@ -465,12 +468,11 @@
     (declare (type fixnum nel)
              (type single-float sf))
     (setf (itu-filt-result-tpl ans)
-          (float
+          (sfloat
            (max (loop for ix fixnum from 0 below nel by 2 maximize
                       (fir-maxabs-samp (aref buf ix) *bufl*))
                 (loop for ix fixnum from 1 below nel by 2 maximize
-                      (fir-maxabs-samp (aref buf ix) *bufr*)))
-           1e0)
+                      (fir-maxabs-samp (aref buf ix) *bufr*))))
           
           (itu-filt-result-rss ans)
           (* sf
@@ -517,7 +519,10 @@
   (do ((val  0)
        (ix   0  (1+ ix)))
       ((>= ix ixstop) val)
-    (declare (type fixnum val ix))
+    (declare (type fixnum ix)
+             (type integer val))
+    ;; watch out -- sometimes we extract 80-bit values here
+    ;; so val is not always a fixnum
     (setf val (logior (ash val 8)
                       (aref vec (+ start ix))))))
 
@@ -551,7 +556,7 @@
          (mant (* sgn
                   (logior #.(ash 1 23) (ldb (byte 23 0) val)))))
     (declare (type fixnum sgn exp mant))
-    (scale-float (float mant) exp)))
+    (scale-float (sfloat mant) exp)))
 
 (defun convert-u80-to-flt80 (val)
   (declare (optimize (speed 3)
@@ -616,29 +621,21 @@
 
 ;; ------------------------------------------------
 
-(defvar *scratch-2*  (make-array 2
-                               :element-type '(unsigned-byte 8)))
-
-(defvar *scratch-3*  (make-array 3
-                               :element-type '(unsigned-byte 8)))
-
 (defvar *scratch-4*  (make-array 4
-                               :element-type '(unsigned-byte 8)))
+                                 :element-type '(unsigned-byte 8)))
+
+(defun read-scratch (f nel)
+  (read-sequence *scratch-4* f :end nel)
+  *scratch-4*)
 
 (defun read-16 (f)
-  (let* ((v  *scratch-2*))
-    (read-sequence v f)
-    v))
+  (read-scratch f 2))
 
 (defun read-24 (f)
-  (let* ((v  *scratch-3*))
-    (read-sequence v f)
-    v))
+  (read-scratch f 3))
 
 (defun read-32 (f)
-  (let* ((v  *scratch-4*))
-    (read-sequence v f)
-    v))
+  (read-scratch f 4))
 
 ;; ------------------------------------------------
 
@@ -771,15 +768,15 @@
            (extractor (ecase bps
                         (16  (case endian
                                (:le (lambda (vec pos)
-                                      (scale-float (float (extract-s16le vec pos)) -15)))
+                                      (scale-float (sfloat (extract-s16le vec pos)) -15)))
                                (:be (lambda (vec pos)
-                                      (scale-float (float (extract-s16be vec pos)) -15)))
+                                      (scale-float (sfloat (extract-s16be vec pos)) -15)))
                                ))
                         (24  (case endian
                                (:le (lambda (vec pos)
-                                      (scale-float (float (extract-s24le vec pos)) -23)))
+                                      (scale-float (sfloat (extract-s24le vec pos)) -23)))
                                (:be (lambda (vec pos)
-                                      (scale-float (float (extract-s24be vec pos)) -23)))
+                                      (scale-float (sfloat (extract-s24be vec pos)) -23)))
                                ))
                         (32  (case endian
                                (:le  'extract-flt32le)
@@ -816,7 +813,7 @@
 |#
 
 (defun rnd1 (v)
-  (float (* 0.1 (round v 0.1)) 1e0))
+  (sfloat (* 0.1 (round v 0.1))))
 
 (defun r128-rating (&optional fname)
   (declare (optimize (speed 3)
@@ -867,7 +864,7 @@
               (when (> avg30 1e-7) ;; -70 dBFS absolute thresh
                 (setf pk (max pk avg30))
                 (when (zerop (mod rms30ix 10))
-                  (vector-push-extend (float avg30 1e0) hist)))
+                  (vector-push-extend (sfloat avg30) hist)))
               ;; collect 400 ms windows for PL
               (when (and (> avg4 1e-7)  ;; -70 dBFS absolute thresh
                          (> avg4 (* 0.1 prms))) ;; -10 dB relative thresh
