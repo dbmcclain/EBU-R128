@@ -687,6 +687,47 @@
 (defstruct wave-file
   f fname fsamp nsamp bits-per-sample nchan endian)
 
+(defun get-wav-info (f magic fname)
+  (file-advance f 4)
+  (read-sequence magic f)
+  (assert (string= magic "WAVE"))
+  (find-chunk f "fmt ")
+  (let* ((fmt   (read-audio-format f))
+         (nchan (extract-u16le fmt 2))
+         (fsamp (extract-u32le fmt 4))
+         (bits-per-sample (extract-u16le fmt 14)))
+    (find-chunk f "data")
+    (let* ((nb    (read-u32le f))
+           (nsamp (truncate (* 8 nb) (* nchan bits-per-sample))))
+      (make-wave-file :f      f
+                      :fname  fname
+                      :fsamp  fsamp
+                      :nsamp  nsamp
+                      :bits-per-sample bits-per-sample
+                      :nchan  nchan
+                      :endian :le))))
+
+(defun get-aif-info (f magic fname)
+  (file-advance f 4)
+  (read-sequence magic f)
+  (let ((endian (cond ((string= magic "AIFF") :be)
+                      ((string= magic "AIFC") :le))))
+    (find-chunk f "COMM" :endian :be)
+    (let* ((fmt   (read-audio-format f :be))
+           (nchan (extract-u16be fmt 0))
+           (nsamp (extract-u32be fmt 2))
+           (bits-per-sample (extract-u16be fmt 6))
+           (fsamp (extract-flt80be fmt 8)))
+      (find-chunk f "SSND" :endian :be)
+      (file-advance f 12)
+      (make-wave-file :f f
+                      :fname fname
+                      :fsamp fsamp
+                      :nsamp nsamp
+                      :bits-per-sample bits-per-sample
+                      :nchan nchan
+                      :endian endian))))
+
 (defun do-with-open-wav-file (filename fn)
   (with-remembered-filename (fname :com.sd.wav.last-wave-file)
       (or filename
@@ -696,51 +737,16 @@
     (with-open-file (f fname
                        :direction :input
                        :element-type '(unsigned-byte 8))
-      (let* ((magic (make-string 4)))
-        (read-sequence magic f)
-        (cond ((string= magic "RIFF") ;; .WAV format
-               (file-advance f 4)
-               (read-sequence magic f)
-               (assert (string= magic "WAVE"))
-               (find-chunk f "fmt ")
-               (let* ((fmt   (read-audio-format f))
-                      (nchan (extract-u16le fmt 2))
-                      (fsamp (extract-u32le fmt 4))
-                      (bits-per-sample (extract-u16le fmt 14)))
-                 (find-chunk f "data")
-                 (let* ((nb    (read-u32le f))
-                        (nsamp (truncate (* 8 nb) (* nchan bits-per-sample))))
-                   (funcall fn (make-wave-file :f   f
-                                               :fname fname
-                                               :fsamp fsamp
-                                               :nsamp nsamp
-                                               :bits-per-sample bits-per-sample
-                                               :nchan nchan
-                                               :endian :le)))
-                 ))
-              
-              ((string= magic "FORM") ;; .AIF format
-               (file-advance f 4)
-               (read-sequence magic f)
-               (let ((endian (cond ((string= magic "AIFF") :be)
-                                   ((string= magic "AIFC") :le))))
-                 (find-chunk f "COMM" :endian :be)
-                 (let* ((fmt   (read-audio-format f :be))
-                        (nchan (extract-u16be fmt 0))
-                        (nsamp (extract-u32be fmt 2))
-                        (bits-per-sample (extract-u16be fmt 6))
-                        (fsamp (extract-flt80be fmt 8)))
-                   (find-chunk f "SSND" :endian :be)
-                   (file-advance f 12)
-                   (funcall fn (make-wave-file :f f
-                                               :fname fname
-                                               :fsamp fsamp
-                                               :nsamp nsamp
-                                               :bits-per-sample bits-per-sample
-                                               :nchan nchan
-                                               :endian endian))
-                   )))
-               )))))
+      (funcall fn
+               (let* ((magic (make-string 4)))
+                 (read-sequence magic f)
+                 (cond ((string= magic "RIFF") ;; .WAV format
+                        (get-wav-info f magic fname))
+
+                       ((string= magic "FORM") ;; .AIF format
+                        (get-aif-info f magic fname))
+                       )))
+      )))
 
 (defmacro with-wav-file ((wf &optional filename) &body body)
   `(do-with-open-wav-file ,filename
@@ -781,13 +787,11 @@
                         )))
       (lambda ()
         (read-sequence rawdata f)
-        ;; (user::dump rawdata)
         (loop repeat (* nsamp nchan)
               for ix from 0 by nbs
               for jx from 0
               do
               (setf (aref data jx) (funcall extractor rawdata ix)))
-        ;; (user::dump data)
         data))))
      
 (defmethod get-wave-data ((wf wave-file) nsamp &key dst)
@@ -821,7 +825,7 @@
                      (fsamp  wave-file-fsamp)
                      (fname  wave-file-fname)) wf
       (print fname)
-      (let* ((ns100 (round (* 0.1 fsamp)))
+      (let* ((ns100 (round (* 0.1 fsamp))) ;; 100 ms increments
              (data  (make-array (* 2 ns100)
                                 :element-type 'single-float))
              (tp       0)
@@ -854,13 +858,13 @@
                   rms30ix  (mod (1+ rms30ix) 30)
                   (aref rms4 rms4ix)    rss
                   rms4ix   (mod (1+ rms4ix)   4))
-            (let ((avg30 (/ (reduce '+ rms30) 30))
-                  (avg4  (/ (reduce '+ rms4)   4)))
+            (let ((avg30 (/ (reduce '+ rms30) 30.0))  ;; 3 sec sliding window
+                  (avg4  (/ (reduce '+ rms4)   4.0))) ;; 400 ms sliding window
               ;; collect 3 sec windows for PR
               (when (> avg30 1e-7) ;; -70 dBFS absolute thresh
-                (setf pk (max pk avg30))
-                (when (zerop (mod rms30ix 10))
-                  (vector-push-extend (sfloat avg30) hist)))
+                (setf pk (max pk avg30)) ;; max 3 sec level
+                (when (zerop (mod rms30ix 10)) ;; 1 sec intervals
+                  (vector-push-extend avg30 hist)))
               ;; collect 400 ms windows for PL
               (when (and (> avg4 1e-7)  ;; -70 dBFS absolute thresh
                          (> avg4 (* 0.1 prms))) ;; -10 dB relative thresh
