@@ -272,10 +272,10 @@
               :initial-element 0e0))
 (defparameter *bix* 0)
 (defparameter *phs*
-  (list *ph0*
-        *ph1*
+  (list *ph3*
         *ph2*
-        *ph3*))
+        *ph1*
+        *ph0*))
 
 (defun fir-init ()
   (fill *bufl* 0e0)
