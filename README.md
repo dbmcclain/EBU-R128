@@ -24,10 +24,26 @@ uncovering the secrets for WAV and AIFF formats.
 
 Example:
 
-(itu-rating)  ;; prompts for a file to analyze
+(r128-rating)  ;; prompts for a file to analyze
 
 ==> (:FILE #P"/Users/davidmcclain/projects/Music/Sine -18dBFSpk
 32flt.wav" :TPL -18.0 :PL -18.0 :LU23 5.0 :LRA 0.0 :PR 0.0)
+
+
+Entry points:  
+
+(R128-RATING &optional <filename>)
+   scans the file and reports the R128 statistics. Prompts for a file if the
+    argument filename is omitted.
+
+(R128-RATINGS &optional <list-of-filenames>)
+   scans the files and reports the R128 statistics for each file. Prompts for
+   multiple files if the argument list is missing.
+
+(R128-ALBUM-RATING &optional <list-of-filenames>)
+   scans the files and reports the overall album R128 statistics. Prompts for
+    multiple files if the argument list is missing.
+
 
 No restrictions are placed on this code.
 

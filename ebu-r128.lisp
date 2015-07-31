@@ -190,7 +190,7 @@
                         -0.1022949218750d0
                         0.0476074218750d0
                         -0.0266113281250d0
-                        0.0148925781250
+                        0.0148925781250d0
                         -0.0083007812500d0)))))
 
 (defvar *ph1*
@@ -400,6 +400,48 @@
              :color :blue))
                                        
 |#
+;; --------------------------------------------------------------------------
+(fli:disconnect-module :hsiirlib)
+(fli:register-module :hsiirlib
+                     :real-name
+                     (translate-logical-pathname
+                      #+:MAC   "PROJECTS:DYLIB;libHsIIR.dylib"
+                      #+:WIN32 "PROJECTS:DYLIB;libHsIIR.dll"))
+
+(fli:define-foreign-function (_hsiir_init "hsiir_init" :source)
+    ((coffs  (:pointer :float)))
+  :result-type :void
+  :language :ansi-c
+  :module :hsiirlib)
+
+(fli:define-foreign-function (_hsiir_eval "hsiir_eval_blk" :source)
+    ((buf   (:pointer :float))
+     (nsamp :long)
+     (ans   (:pointer :float)))
+  :result-type :void
+  :language :ansi-c
+  :module :hsiirlib)
+
+(defun c-hsiir-init (coffs)
+  (fli:with-dynamic-foreign-objects ()
+    (let* ((c-coffs (fli:allocate-dynamic-foreign-object
+                     :type :float :nelems 10
+                     :initial-contents (coerce coffs 'list))))
+      (_hsiir_init c-coffs))))
+
+(defun c-hsiir-eval (buf nsamp ans)
+  (fli:with-dynamic-foreign-objects ()
+    (let* ((c-buf (fli:allocate-dynamic-foreign-object
+                   :type :float :nelems (* 2 nsamp)
+                   :initial-contents (coerce buf 'list)))
+           (c-ans (fli:allocate-dynamic-foreign-object
+                   :type :float :nelems 2)))
+      (_hsiir_eval c-buf nsamp c-ans)
+      (setf (itu-filt-result-tpl ans) (fli:dereference c-ans :index 1)
+            (itu-filt-result-rss ans) (fli:dereference c-ans :index 0))
+      )))
+
+;; --------------------------------------------------------------------------
 
 (defvar *itu-filter*)
 (defvar *itu-db-corr*)
@@ -427,7 +469,10 @@
                               (db-filt 1 hpf fs))))
     (fill *itu-stateL* 0e0)
     (fill *itu-stateR* 0e0)
-    (fir-init)))
+    (fir-init)
+
+    (c-hsiir-init coffs)
+    ))
   
 (init-itu-filter 48)
 
@@ -459,6 +504,7 @@
   tpl rss)
 
 (defun itu-filt (buf ans)
+  #|
   (declare (optimize (speed 3)
                      (safety 0)
                      (float 0)))
@@ -484,7 +530,10 @@
                      (declare (type single-float yl yr))
                      (+ (* yl yl)
                         (* yr yr)))))
-          )))
+          ))
+  |#
+  (c-hsiir-eval buf (truncate (length buf) 2) ans)
+  )
                 
 ;; ------------------------------------------------
 
@@ -625,9 +674,13 @@
         ))))
 
 (defun get-file-collection (&optional files)
-  (or files
-      (capi:prompt-for-files "Select Album Files"
-                             :filter "*.wav;*.aif;*.aiff")))
+  (let* ((files (or files
+                    (capi:prompt-for-files "Select Album Files"
+                                           :filter "*.wav;*.aif;*.aiff"
+                                           :pathname (remembered-filename :com.sd.wav.last-wave-file) ))))
+    (when files
+      (remember-filename :com.sd.wav.last-wave-file (car files)))
+    files))
       
 (defun r128-rating (&optional file)
   ;; obtain ratings for single audio file
