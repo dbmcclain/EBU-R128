@@ -428,17 +428,21 @@
 (defun c-hsiir-init (coffs)
   (fli:with-dynamic-foreign-objects ()
     (let* ((c-coffs (fli:allocate-dynamic-foreign-object
-                     :type :float :nelems 10
-                     :initial-contents (coerce coffs 'list))))
+                     :type   :float
+                     :nelems 10
+                     )))
+      (fli:replace-foreign-array c-coffs coffs :start1 0 :end1 10)
       (_hsiir_init c-coffs))))
 
 (defun c-hsiir-eval (buf nsamp ans)
   (fli:with-dynamic-foreign-objects ()
     (let* ((c-buf (fli:allocate-dynamic-foreign-object
-                   :type :float :nelems (* 2 nsamp)
-                   :initial-contents (coerce buf 'list)))
+                   :type   :float
+                   :nelems (* 2 nsamp)
+                   ))
            (c-ans (fli:allocate-dynamic-foreign-object
                    :type :float :nelems 2)))
+      (fli:replace-foreign-array c-buf buf :start1 0 :end1 (* 2 nsamp))
       (_hsiir_eval c-buf nsamp c-ans)
       (setf (itu-filt-result-tpl ans) (fli:dereference c-ans :index 1)
             (itu-filt-result-rss ans) (fli:dereference c-ans :index 0))
