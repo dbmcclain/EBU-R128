@@ -401,6 +401,9 @@
                                        
 |#
 ;; --------------------------------------------------------------------------
+(defstruct itu-filt-result
+  tpl rss)
+
 (fli:disconnect-module :hsiirlib)
 (fli:register-module :hsiirlib
                      :real-name
@@ -499,9 +502,6 @@
         (declare (type single-float y z))
         (shiftf (aref state 5) (aref state 4) z)
         z))))
-
-(defstruct itu-filt-result
-  tpl rss)
 
 (defun itu-filt (buf ans)
   #|
