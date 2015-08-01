@@ -33,15 +33,15 @@ Example:
 
 Entry points:  
 
-(R128-RATING &optional <filename>)
+(R128-RATING &optional [filename])
    scans the file and reports the R128 statistics. Prompts for a file if the
     argument filename is omitted.
 
-(R128-RATINGS &optional <list-of-filenames>)
+(R128-RATINGS &optional [list-of-filenames])
    scans the files and reports the R128 statistics for each file. Prompts for
    multiple files if the argument list is missing.
 
-(R128-ALBUM-RATING &optional <list-of-filenames>)
+(R128-ALBUM-RATING &optional [list-of-filenames])
    scans the files and reports the overall album R128 statistics. Prompts for
     multiple files if the argument list is missing.
 
