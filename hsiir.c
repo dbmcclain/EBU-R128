@@ -83,9 +83,15 @@ static float tpl_ph3[12] = {
 // Vectorized Version...
 
 typedef union {
-   __m128 v;
-   float  f[4];
+  __m128  v;
+  float   f[4];
+  double  d[2];
 } f4vector;
+
+typedef union {
+  __m128  v;
+  double  d[2];
+} d2vector;
 
 static long     tpl_ix = 0;
 static f4vector tplvl_state[24];
@@ -110,17 +116,21 @@ static void save_firv_sample(float vl, float vr)
      tpl_ix = 11;
 
    // quadruple up so we can eval all 4 phases at once
-   tplvl_state[tpl_ix].f[0] = vl;
-   tplvl_state[tpl_ix].f[1] = vl;
-   tplvl_state[tpl_ix].f[2] = vl;
-   tplvl_state[tpl_ix].f[3] = vl;
-   tplvl_state[tpl_ix+12].v = tplvl_state[tpl_ix].v;
+   f4vector xl;
+   xl.f[0] = vl;
+   xl.f[1] = vl;
+   xl.f[2] = vl;
+   xl.f[3] = vl;
+   tplvl_state[tpl_ix].v    = xl.v;
+   tplvl_state[tpl_ix+12].v = xl.v;
 
-   tplvr_state[tpl_ix].f[0] = vr;
-   tplvr_state[tpl_ix].f[1] = vr;
-   tplvr_state[tpl_ix].f[2] = vr;
-   tplvr_state[tpl_ix].f[3] = vr;
-   tplvr_state[tpl_ix+12].v = tplvr_state[tpl_ix].v;
+   f4vector  xr;
+   xr.f[0] = vr;
+   xr.f[1] = vr;
+   xr.f[2] = vr;
+   xr.f[3] = vr;
+   tplvr_state[tpl_ix].v    = xr.v;
+   tplvr_state[tpl_ix+12].v = xr.v;
 }
 
 static float tplv_maxsqr()
@@ -184,36 +194,36 @@ float hsiirv_tpl(float* pbuf, long nsamp)
     return tpl_max;
 }
 
-static f4vector hsiir_coffs[10];
-static f4vector hsiir_state[6];
+static d2vector hsiir_coffs[10];
+static d2vector hsiir_state[6];
+static d2vector hsiir_inp;
 
 static float hsiirv_rss(float *pbuf, long nsamp)
 {
-    float rss_sum;
-    long  ix;
-    f4vector x, y, z;
+    double rss_sum;
+    long   ix;
 
-    x.f[2] = 0.0f; // just to avoid any slowdown from possible NaN's
-    x.f[3] = 0.0f;
-    rss_sum = 0.0f;
+    rss_sum = 0.0;
     
     for(ix = nsamp; --ix >= 0;)
     {
-      x.f[0] = pbuf[0];
-      x.f[1] = pbuf[1];
+      d2vector x, y, z;
+
+      x.d[0] = (double)pbuf[0];
+      x.d[1] = (double)pbuf[1];
       pbuf += 2;
       
-      y.v = _mm_mul_ps(x.v, hsiir_coffs[0].v);
-      y.v = _mm_add_ps(y.v, _mm_mul_ps(hsiir_state[0].v, hsiir_coffs[1].v));
-      y.v = _mm_add_ps(y.v, _mm_mul_ps(hsiir_state[1].v, hsiir_coffs[2].v));
-      y.v = _mm_add_ps(y.v, _mm_mul_ps(hsiir_state[2].v, hsiir_coffs[3].v));
-      y.v = _mm_add_ps(y.v, _mm_mul_ps(hsiir_state[3].v, hsiir_coffs[4].v));
+      y.v =                 _mm_mul_pd(x.v, hsiir_coffs[0].v);
+      y.v = _mm_add_pd(y.v, _mm_mul_pd(hsiir_state[0].v, hsiir_coffs[1].v));
+      y.v = _mm_add_pd(y.v, _mm_mul_pd(hsiir_state[1].v, hsiir_coffs[2].v));
+      y.v = _mm_add_pd(y.v, _mm_mul_pd(hsiir_state[2].v, hsiir_coffs[3].v));
+      y.v = _mm_add_pd(y.v, _mm_mul_pd(hsiir_state[3].v, hsiir_coffs[4].v));
       
-      z.v = _mm_mul_ps(y.v, hsiir_coffs[5].v);
-      z.v = _mm_add_ps(z.v, _mm_mul_ps(hsiir_state[2].v, hsiir_coffs[6].v));
-      z.v = _mm_add_ps(z.v, _mm_mul_ps(hsiir_state[3].v, hsiir_coffs[7].v));
-      z.v = _mm_add_ps(z.v, _mm_mul_ps(hsiir_state[4].v, hsiir_coffs[8].v));
-      z.v = _mm_add_ps(z.v, _mm_mul_ps(hsiir_state[5].v, hsiir_coffs[9].v));
+      z.v =                 _mm_mul_pd(y.v, hsiir_coffs[5].v);
+      z.v = _mm_add_pd(z.v, _mm_mul_pd(hsiir_state[2].v, hsiir_coffs[6].v));
+      z.v = _mm_add_pd(z.v, _mm_mul_pd(hsiir_state[3].v, hsiir_coffs[7].v));
+      z.v = _mm_add_pd(z.v, _mm_mul_pd(hsiir_state[4].v, hsiir_coffs[8].v));
+      z.v = _mm_add_pd(z.v, _mm_mul_pd(hsiir_state[5].v, hsiir_coffs[9].v));
 
       hsiir_state[1].v = hsiir_state[0].v;
       hsiir_state[0].v = x.v;
@@ -224,22 +234,24 @@ static float hsiirv_rss(float *pbuf, long nsamp)
       hsiir_state[5].v = hsiir_state[4].v;
       hsiir_state[4].v = z.v;
 
-      z.v = _mm_mul_ps(z.v, z.v);
-      rss_sum += z.f[0] + z.f[1];
+      z.v = _mm_mul_pd(z.v, z.v);
+      rss_sum += z.d[0] + z.d[1];
     }
-    return (rss_sum / nsamp);
+    return (float)(rss_sum / nsamp);
 }
 
 extern "C"
-void hsiir_init(float *pcoffs)
+void hsiir_init(double *pcoffs)
 {
   memset(hsiir_coffs,0,sizeof(hsiir_coffs)); // clear out to avoid NaN's
   memset(hsiir_state,0,sizeof(hsiir_state));
   tplv_init();
   for(long ix = 10; --ix >= 0; )
     {
-      hsiir_coffs[ix].f[0] = pcoffs[ix];
-      hsiir_coffs[ix].f[1] = pcoffs[ix];
+      // double up filter coffs so we can filter both L/R at same time
+      double x = pcoffs[ix];
+      hsiir_coffs[ix].d[0] = x;
+      hsiir_coffs[ix].d[1] = x;
     }
 }
 
@@ -322,66 +334,66 @@ float hsiir_tpl(float* pbuf, long nsamp)
     return tpl_max;
 }
 
-static float hsiir_coffs[10];
-static float hsiir_lbuf[6];
-static float hsiir_rbuf[6];
+static double hsiir_coffs[10];
+static double hsiir_lstate[6];
+static double hsiir_rstate[6];
 
 static float hsiir_rss(float *pbuf, long nsamp)
 {
-    float rss_sum;
+    double rss_sum;
     int   ix;
 
     rss_sum = 0.0f;
     for(ix = nsamp; --ix >= 0;)
     {
-        float yl, zl, yr, zr;
+        double yl, zl, yr, zr;
 
-        yl = pbuf[0] * hsiir_coffs[0] +
-                    hsiir_lbuf[0] * hsiir_coffs[1] +
-                    hsiir_lbuf[1] * hsiir_coffs[2] +
-                    hsiir_lbuf[2] * hsiir_coffs[3] +
-                    hsiir_lbuf[3] * hsiir_coffs[4];
+        yl = (double)pbuf[0] * hsiir_coffs[0] +
+                    hsiir_lstate[0] * hsiir_coffs[1] +
+                    hsiir_lstate[1] * hsiir_coffs[2] +
+                    hsiir_lstate[2] * hsiir_coffs[3] +
+                    hsiir_lstate[3] * hsiir_coffs[4];
         zl = yl * hsiir_coffs[5] +
-                    hsiir_lbuf[2] * hsiir_coffs[6] +
-                    hsiir_lbuf[3] * hsiir_coffs[7] +
-                    hsiir_lbuf[4] * hsiir_coffs[8] +
-                    hsiir_lbuf[5] * hsiir_coffs[9];
-        hsiir_lbuf[1] = hsiir_lbuf[0];
-        hsiir_lbuf[0] = pbuf[0];
-        hsiir_lbuf[3] = hsiir_lbuf[2];
-        hsiir_lbuf[2] = yl;
-        hsiir_lbuf[5] = hsiir_lbuf[4];
-        hsiir_lbuf[4] = zl;
+                    hsiir_lstate[2] * hsiir_coffs[6] +
+                    hsiir_lstate[3] * hsiir_coffs[7] +
+                    hsiir_lstate[4] * hsiir_coffs[8] +
+                    hsiir_lstate[5] * hsiir_coffs[9];
+        hsiir_lstate[1] = hsiir_lstate[0];
+        hsiir_lstate[0] = (double)pbuf[0];
+        hsiir_lstate[3] = hsiir_lstate[2];
+        hsiir_lstate[2] = yl;
+        hsiir_lstate[5] = hsiir_lstate[4];
+        hsiir_lstate[4] = zl;
         
-        yr = pbuf[1] * hsiir_coffs[0] +
-                    hsiir_rbuf[0] * hsiir_coffs[1] +
-                    hsiir_rbuf[1] * hsiir_coffs[2] +
-                    hsiir_rbuf[2] * hsiir_coffs[3] +
-                    hsiir_rbuf[3] * hsiir_coffs[4];
+        yr = (double)pbuf[1] * hsiir_coffs[0] +
+                    hsiir_rstate[0] * hsiir_coffs[1] +
+                    hsiir_rstate[1] * hsiir_coffs[2] +
+                    hsiir_rstate[2] * hsiir_coffs[3] +
+                    hsiir_rstate[3] * hsiir_coffs[4];
         zr = yr * hsiir_coffs[5] +
-                    hsiir_rbuf[2] * hsiir_coffs[6] +
-                    hsiir_rbuf[3] * hsiir_coffs[7] +
-                    hsiir_rbuf[4] * hsiir_coffs[8] +
-                    hsiir_rbuf[5] * hsiir_coffs[9];
-        hsiir_rbuf[1] = hsiir_rbuf[0];
-        hsiir_rbuf[0] = pbuf[1];
-        hsiir_rbuf[3] = hsiir_rbuf[2];
-        hsiir_rbuf[2] = yr;
-        hsiir_rbuf[5] = hsiir_rbuf[4];
-        hsiir_rbuf[4] = zr;
+                    hsiir_rstate[2] * hsiir_coffs[6] +
+                    hsiir_rstate[3] * hsiir_coffs[7] +
+                    hsiir_rstate[4] * hsiir_coffs[8] +
+                    hsiir_rstate[5] * hsiir_coffs[9];
+        hsiir_rstate[1] = hsiir_rstate[0];
+        hsiir_rstate[0] = (double)pbuf[1];
+        hsiir_rstate[3] = hsiir_rstate[2];
+        hsiir_rstate[2] = yr;
+        hsiir_rstate[5] = hsiir_rstate[4];
+        hsiir_rstate[4] = zr;
         
         rss_sum += zl * zl + zr * zr;
         pbuf += 2;
     }
-    return (rss_sum / nsamp);
+    return (float)(rss_sum / nsamp);
 }
 
 extern "C"
-void hsiir_init(float *pcoffs)
+void hsiir_init(double *pcoffs)
 {
-    memcpy(hsiir_coffs, pcoffs, 10*sizeof(float));
-    memset(hsiir_lbuf,0,sizeof(hsiir_lbuf));
-    memset(hsiir_rbuf,0,sizeof(hsiir_rbuf));
+    memcpy(hsiir_coffs, pcoffs, 10*sizeof(double));
+    memset(hsiir_lstate,0,sizeof(hsiir_lstate));
+    memset(hsiir_rstate,0,sizeof(hsiir_rstate));
     memset(tpl_lbuf,0,sizeof(tpl_lbuf));
     memset(tpl_rbuf,0,sizeof(tpl_rbuf));
     tpl_ix = 0;

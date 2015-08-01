@@ -415,7 +415,7 @@
                       #+:WIN32 "PROJECTS:DYLIB;libHsIIR.dll"))
 
 (fli:define-foreign-function (_hsiir_init "hsiir_init" :source)
-    ((coffs  (:pointer :float)))
+    ((coffs  (:pointer :double)))
   :result-type :void
   :language :ansi-c
   :module :hsiirlib)
@@ -431,10 +431,11 @@
 (defun c-hsiir-init (coffs)
   (fli:with-dynamic-foreign-objects ()
     (let* ((c-coffs (fli:allocate-dynamic-foreign-object
-                     :type   :float
+                     :type   :double
                      :nelems 10
+                     :initial-contents coffs
                      )))
-      (fli:replace-foreign-array c-coffs coffs :start1 0 :end1 10)
+      ;; (fli:replace-foreign-array c-coffs coffs :start1 0 :end1 10)
       (_hsiir_init c-coffs))))
 
 (defun c-hsiir-eval (buf nsamp ans)
@@ -467,13 +468,13 @@
               :initial-element 0e0))
 
 (defun init-itu-filter (fs)
-  (let* ((hpf  (hpf       (/ 0.0375 fs) 0.5))
-         (hsh  (hishelf 4 (/ 1.5 fs)    0.707))
-         (coffs (make-array 10
-                            :element-type     'single-float
-                            :initial-contents
-                            (mapcar 'sfloat
-                                    (append hpf hsh)))))
+  (let* ((hpf    (hpf       (/ 0.0375 fs) 0.5))
+         (hsh    (hishelf 4 (/ 1.5 fs)    0.707))
+         (dcoffs (append hpf hsh))
+         (coffs  (make-array 10
+                             :element-type     'single-float
+                             :initial-contents
+                             (mapcar 'sfloat dcoffs))))
     (setf *itu-filter* coffs
           *itu-db-corr* (- (+ (db-filt 1 hsh fs)
                               (db-filt 1 hpf fs))))
@@ -481,7 +482,7 @@
     (fill *itu-stateR* 0e0)
     (fir-init)
 
-    (c-hsiir-init coffs)
+    (c-hsiir-init dcoffs)
     ))
   
 (init-itu-filter 48)
