@@ -101,7 +101,7 @@ static void tplv_init()
       tplv_coffs[ix].f[2] = tpl_ph2[ix];
       tplv_coffs[ix].f[3] = tpl_ph3[ix];
     }
-    tpl_ix = 0;
+  tpl_ix = 0;
 }
 
 static void save_firv_sample(float vl, float vr)
@@ -109,31 +109,26 @@ static void save_firv_sample(float vl, float vr)
    if(--tpl_ix < 0)
      tpl_ix = 11;
 
+   // quadruple up so we can eval all 4 phases at once
    tplvl_state[tpl_ix].f[0] = vl;
    tplvl_state[tpl_ix].f[1] = vl;
    tplvl_state[tpl_ix].f[2] = vl;
    tplvl_state[tpl_ix].f[3] = vl;
-   tplvl_state[tpl_ix+12].f[0] = vl;
-   tplvl_state[tpl_ix+12].f[1] = vl;
-   tplvl_state[tpl_ix+12].f[2] = vl;
-   tplvl_state[tpl_ix+12].f[3] = vl;
+   tplvl_state[tpl_ix+12].v = tplvl_state[tpl_ix].v;
 
    tplvr_state[tpl_ix].f[0] = vr;
    tplvr_state[tpl_ix].f[1] = vr;
    tplvr_state[tpl_ix].f[2] = vr;
    tplvr_state[tpl_ix].f[3] = vr;
-   tplvr_state[tpl_ix+12].f[0] = vr;
-   tplvr_state[tpl_ix+12].f[1] = vr;
-   tplvr_state[tpl_ix+12].f[2] = vr;
-   tplvr_state[tpl_ix+12].f[3] = vr;
+   tplvr_state[tpl_ix+12].v = tplvr_state[tpl_ix].v;
 }
 
-static double tplv_maxsqr()
+static float tplv_maxsqr()
 {
   f4vector *ph = tplv_coffs;
   
-  f4vector *psl = &tplvl_state[tpl_ix];
   f4vector suml;
+  f4vector *psl = &tplvl_state[tpl_ix];
   suml.v = _mm_mul_ps(ph[0].v,psl[0].v);
   suml.v = _mm_add_ps(suml.v, _mm_mul_ps(ph[1].v,psl[1].v));
   suml.v = _mm_add_ps(suml.v, _mm_mul_ps(ph[2].v,psl[2].v));
@@ -146,7 +141,7 @@ static double tplv_maxsqr()
   suml.v = _mm_add_ps(suml.v, _mm_mul_ps(ph[9].v,psl[9].v));
   suml.v = _mm_add_ps(suml.v, _mm_mul_ps(ph[10].v,psl[10].v));
   suml.v = _mm_add_ps(suml.v, _mm_mul_ps(ph[11].v,psl[11].v));
-  suml.v = _mm_mul_ps(suml.v, suml.v);
+  suml.v = _mm_mul_ps(suml.v, suml.v); // in lieu of taking abs value
 
   f4vector sumr;
   f4vector *psr = &tplvr_state[tpl_ix];
@@ -162,7 +157,7 @@ static double tplv_maxsqr()
   sumr.v = _mm_add_ps(sumr.v, _mm_mul_ps(ph[9].v,psr[9].v));
   sumr.v = _mm_add_ps(sumr.v, _mm_mul_ps(ph[10].v,psr[10].v));
   sumr.v = _mm_add_ps(sumr.v, _mm_mul_ps(ph[11].v,psr[11].v));
-  sumr.v = _mm_mul_ps(sumr.v, sumr.v);
+  sumr.v = _mm_mul_ps(sumr.v, sumr.v); // strange that abs operator is missing??
 
   suml.v = _mm_max_ps(suml.v, sumr.v);
   
