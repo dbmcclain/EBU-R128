@@ -93,10 +93,19 @@ static void save_fir_sample(float lsamp, float rsamp)
 
 static float tpl_accum_phase(float *ph)
 {
+    long ix;
     float suml, sumr;
-   
-    vDSP_dotpr(ph, 1, &tpl_lbuf[tpl_ix], 1, &suml, 12);
-    vDSP_dotpr(ph, 1, &tpl_rbuf[tpl_ix], 1, &sumr, 12);
+    float *pl, *pr;
+
+    suml = 0.0f;
+    sumr = 0.0f;
+    pl = &tpl_lbuf[tpl_ix];
+    pr = &tpl_rbuf[tpl_ix];
+    for(ix = 12; --ix >= 0;)
+    {
+       suml += *ph   * *pl++;
+       sumr += *ph++ * *pr++;
+    }  
     suml = fabsf(suml);
     sumr = fabsf(sumr);
     return (suml > sumr ? suml : sumr);
