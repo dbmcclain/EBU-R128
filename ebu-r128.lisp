@@ -313,6 +313,13 @@
   (loop for ph in *phs*
         collect (fir-ph-filt ph buf)))
 
+(defun sqr (x)
+  (declare (optimize (speed 3)
+                     (safety 0)
+                     (float 0)))
+  (declare (type single-float x))
+  (* x x))
+
 (defun fir-maxabs-samp (x &optional (buf *bufl*))
   (declare (optimize (speed 3)
                      (safety 0)
@@ -321,7 +328,7 @@
            (type single-float x))
   (store-fir-sample x buf)
   (loop for ph in *phs*
-        maximize (abs (fir-ph-filt ph buf))))
+        maximize (sqr (fir-ph-filt ph buf))))
 
 (defun fir-filt-list (lst)
   (let ((ans (make-array (* 4 (length lst))
@@ -594,7 +601,7 @@
         
         (list
          :file fname
-         :tpl  (rnd1 (db20 tp))
+         :tpl  (rnd1 (db10 tp))
          :pl   (rnd1 pl)
          :lu23 (rnd1 (- pl -23.0))
          :lra  (rnd1 (- p95lu p10lu))
