@@ -129,46 +129,41 @@ static float tplv_maxsqr()
   
   f4vector suml;
   f4vector *psl = &tplvl_state[tpl_ix];
-  suml.v = _mm_mul_ps(ph[0].v,psl[0].v);
-  suml.v = _mm_add_ps(suml.v, _mm_mul_ps(ph[1].v,psl[1].v));
-  suml.v = _mm_add_ps(suml.v, _mm_mul_ps(ph[2].v,psl[2].v));
-  suml.v = _mm_add_ps(suml.v, _mm_mul_ps(ph[3].v,psl[3].v));
-  suml.v = _mm_add_ps(suml.v, _mm_mul_ps(ph[4].v,psl[4].v));
-  suml.v = _mm_add_ps(suml.v, _mm_mul_ps(ph[5].v,psl[5].v));
-  suml.v = _mm_add_ps(suml.v, _mm_mul_ps(ph[6].v,psl[6].v));
-  suml.v = _mm_add_ps(suml.v, _mm_mul_ps(ph[7].v,psl[7].v));
-  suml.v = _mm_add_ps(suml.v, _mm_mul_ps(ph[8].v,psl[8].v));
-  suml.v = _mm_add_ps(suml.v, _mm_mul_ps(ph[9].v,psl[9].v));
+  suml.v =                    _mm_mul_ps(ph[ 0].v,psl[ 0].v);
+  suml.v = _mm_add_ps(suml.v, _mm_mul_ps(ph[ 1].v,psl[ 1].v));
+  suml.v = _mm_add_ps(suml.v, _mm_mul_ps(ph[ 2].v,psl[ 2].v));
+  suml.v = _mm_add_ps(suml.v, _mm_mul_ps(ph[ 3].v,psl[ 3].v));
+  suml.v = _mm_add_ps(suml.v, _mm_mul_ps(ph[ 4].v,psl[ 4].v));
+  suml.v = _mm_add_ps(suml.v, _mm_mul_ps(ph[ 5].v,psl[ 5].v));
+  suml.v = _mm_add_ps(suml.v, _mm_mul_ps(ph[ 6].v,psl[ 6].v));
+  suml.v = _mm_add_ps(suml.v, _mm_mul_ps(ph[ 7].v,psl[ 7].v));
+  suml.v = _mm_add_ps(suml.v, _mm_mul_ps(ph[ 8].v,psl[ 8].v));
+  suml.v = _mm_add_ps(suml.v, _mm_mul_ps(ph[ 9].v,psl[ 9].v));
   suml.v = _mm_add_ps(suml.v, _mm_mul_ps(ph[10].v,psl[10].v));
   suml.v = _mm_add_ps(suml.v, _mm_mul_ps(ph[11].v,psl[11].v));
   suml.v = _mm_mul_ps(suml.v, suml.v); // in lieu of taking abs value
 
   f4vector sumr;
   f4vector *psr = &tplvr_state[tpl_ix];
-  sumr.v = _mm_mul_ps(ph[0].v,psr[0].v);
-  sumr.v = _mm_add_ps(sumr.v, _mm_mul_ps(ph[1].v,psr[1].v));
-  sumr.v = _mm_add_ps(sumr.v, _mm_mul_ps(ph[2].v,psr[2].v));
-  sumr.v = _mm_add_ps(sumr.v, _mm_mul_ps(ph[3].v,psr[3].v));
-  sumr.v = _mm_add_ps(sumr.v, _mm_mul_ps(ph[4].v,psr[4].v));
-  sumr.v = _mm_add_ps(sumr.v, _mm_mul_ps(ph[5].v,psr[5].v));
-  sumr.v = _mm_add_ps(sumr.v, _mm_mul_ps(ph[6].v,psr[6].v));
-  sumr.v = _mm_add_ps(sumr.v, _mm_mul_ps(ph[7].v,psr[7].v));
-  sumr.v = _mm_add_ps(sumr.v, _mm_mul_ps(ph[8].v,psr[8].v));
-  sumr.v = _mm_add_ps(sumr.v, _mm_mul_ps(ph[9].v,psr[9].v));
+  sumr.v =                    _mm_mul_ps(ph[ 0].v,psr[ 0].v);
+  sumr.v = _mm_add_ps(sumr.v, _mm_mul_ps(ph[ 1].v,psr[ 1].v));
+  sumr.v = _mm_add_ps(sumr.v, _mm_mul_ps(ph[ 2].v,psr[ 2].v));
+  sumr.v = _mm_add_ps(sumr.v, _mm_mul_ps(ph[ 3].v,psr[ 3].v));
+  sumr.v = _mm_add_ps(sumr.v, _mm_mul_ps(ph[ 4].v,psr[ 4].v));
+  sumr.v = _mm_add_ps(sumr.v, _mm_mul_ps(ph[ 5].v,psr[ 5].v));
+  sumr.v = _mm_add_ps(sumr.v, _mm_mul_ps(ph[ 6].v,psr[ 6].v));
+  sumr.v = _mm_add_ps(sumr.v, _mm_mul_ps(ph[ 7].v,psr[ 7].v));
+  sumr.v = _mm_add_ps(sumr.v, _mm_mul_ps(ph[ 8].v,psr[ 8].v));
+  sumr.v = _mm_add_ps(sumr.v, _mm_mul_ps(ph[ 9].v,psr[ 9].v));
   sumr.v = _mm_add_ps(sumr.v, _mm_mul_ps(ph[10].v,psr[10].v));
   sumr.v = _mm_add_ps(sumr.v, _mm_mul_ps(ph[11].v,psr[11].v));
   sumr.v = _mm_mul_ps(sumr.v, sumr.v); // strange that abs operator is missing??
 
   suml.v = _mm_max_ps(suml.v, sumr.v);
-  
-  float tpl = suml.f[0];
-  if(suml.f[1] > tpl)
-    tpl = suml.f[1];
-  if(suml.f[2] > tpl)
-    tpl = suml.f[2];
-  if(suml.f[3] > tpl)
-    tpl = suml.f[3];
-  return tpl;
+  sumr.f[2] = suml.f[0];
+  sumr.f[3] = suml.f[1];
+  suml.v = _mm_max_ps(suml.v, sumr.v);
+  return (suml.f[2] > suml.f[3] ? suml.f[2] : suml.f[3]);
 }
 
 extern "C"
