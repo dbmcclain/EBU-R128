@@ -243,8 +243,7 @@ static float hsiirv_rss(float *pbuf, long nsamp)
 extern "C"
 void hsiir_init(double *pcoffs)
 {
-  memset(hsiir_coffs,0,sizeof(hsiir_coffs)); // clear out to avoid NaN's
-  memset(hsiir_state,0,sizeof(hsiir_state));
+  memset(hsiir_state,0,sizeof(hsiir_state)); // clear out to avoid NaN's
   tplv_init();
   for(long ix = 10; --ix >= 0; )
     {
