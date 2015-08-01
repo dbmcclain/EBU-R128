@@ -12,11 +12,12 @@ and -23 dBLU relative measures. And there is an additional measure
 called Peak Ratio (PR) which measures the peak 3-sec loudness against
 the overall PL.
 
-The code has been sped up to about 5x playback rate. It allows you to
-measure all the songs of an album, and find the correct normalization
-based on the loudest song. It is a non-destructive tool, merely
-measuring what resides in the audio files, and reports results in a
-plist.
+The code has been sped up to about 120x playback rate (!! -- that's a
+whopping 5.7 MSamp/sec !!). An 80 minute sound track is analyzed in
+about 45 seconds. It allows you to measure all the songs of an album,
+and find the correct normalization based on the loudest song. It is a
+non-destructive tool, merely measuring what resides in the audio
+files, and reports results in a plist.
 
 Side benefits in this code include a standardized way of making CAPI
 prompt for files with a memory of your last location, as well as
