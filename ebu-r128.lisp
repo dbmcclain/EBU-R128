@@ -435,7 +435,6 @@
                      :nelems 10
                      :initial-contents coffs
                      )))
-      ;; (fli:replace-foreign-array c-coffs coffs :start1 0 :end1 10)
       (_hsiir_init c-coffs))))
 
 (defun c-hsiir-eval (buf nsamp ans)
