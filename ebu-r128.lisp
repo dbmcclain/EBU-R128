@@ -255,7 +255,7 @@
                  collect x1
                  collect x2
                  collect x3))
-       (fs   (map 'vector (rcurry '* 192/32) (iramp 32)))
+       (fs   (map 'vector (rcurry '* 192/64) (iramp 32)))
        (fdb  (fft:fwd-magnitude-db (coerce x 'vector))))
   (plt:plot 'plt x :clear t)
   (plt:plot 'fplt fs fdb :clear t))
@@ -406,27 +406,6 @@
 ;; --------------------------------------------------------------------------
 (defstruct itu-filt-result
   tpl rss)
-
-(fli:disconnect-module :hsiirlib)
-(fli:register-module :hsiirlib
-                     :real-name
-                     (translate-logical-pathname
-                      #+:MAC   "PROJECTS:DYLIB;libHsIIR.dylib"
-                      #+:WIN32 "PROJECTS:DYLIB;libHsIIR.dll"))
-
-(fli:define-foreign-function (_hsiir_init "hsiir_init" :source)
-    ((coffs  (:pointer :double)))
-  :result-type :void
-  :language :ansi-c
-  :module :hsiirlib)
-
-(fli:define-foreign-function (_hsiir_eval "hsiir_eval_blk" :source)
-    ((buf   (:pointer :float))
-     (nsamp :long)
-     (ans   (:pointer :float)))
-  :result-type :void
-  :language :ansi-c
-  :module :hsiirlib)
 
 (defun c-hsiir-init (coffs)
   (fli:with-dynamic-foreign-objects ()
