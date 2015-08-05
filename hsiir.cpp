@@ -11,7 +11,7 @@
 #include <stdlib.h>
 #include <Accelerate/Accelerate.h>
 
-// #define _n(x)  x##6
+// #define _n(x)  x##_3A57DB4E_3965_11E5_816D_C82A14579666
 #define _n(x)  x
 
 /*
@@ -20,7 +20,7 @@
 ;; FIR Taps for 48 kHz Fsamp
 ;; Report in units of dB TP when upsample rate >= 192 kHz
 
-;; order 48, 4-phase, FIR interpolating filter
+;; order 48, 4-phase, polyphase FIR interpolating filter
 ;; DC gain is 12 dB to make up for insertion of zeros
 */
 
@@ -409,3 +409,9 @@ void _n(hsiir_eval_blk)(float *pbuf, long nsamp, float *pdst)
 }
 
 #endif
+
+extern "C"
+long _n(hsiir_test)()
+{
+  return 42;
+}

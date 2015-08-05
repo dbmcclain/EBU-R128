@@ -616,15 +616,15 @@
                      (float 0)))
   (with-wav-file (wf fname)
     (with-accessors ((nsamp  wave-file-nsamp)
-                     (nch    wave-file-nchan)
+                     ;; (nch    wave-file-nchan)
                      (fsamp  wave-file-fsamp)
                      (fname  wave-file-fname)) wf
 
       (print fname)
       (setf (r128-state-fname state) fname)
       
-      (let* ((ns100 (round (* 0.1 fsamp))) ;; 100 ms increments
-             (data  (make-array (* 2 ns100)
+      (let* ((ns100   (round (* 0.1 fsamp))) ;; 100 ms increments
+             (data    (make-array (* 2 ns100)
                                 :element-type 'single-float))
              (rms4    (make-array 4
                                   :element-type 'single-float
@@ -637,7 +637,7 @@
              (wget    (make-wave-data-getter wf ns100 :dst data))
              (iir-ans (make-itu-filt-result)))
         
-        (assert (= nch 2)) ;; only interested in stereo music files
+        ;; (assert (= nch 2)) ;; only interested in stereo music files
         (init-itu-filter (/ fsamp 1000))
         
         (do ((ns  nsamp  (- ns ns100)))

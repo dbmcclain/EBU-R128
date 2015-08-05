@@ -311,12 +311,13 @@
                    (nchan  wave-file-nchan)
                    (endian wave-file-endian)
                    (f      wave-file-f)) wf
+    (assert (<= 1 nchan 2))
     (let* ((nbs     (truncate bps 8))
            (nsraw   (* nsamp nchan))
            (nbraw   (* nbs nsraw))
            (rawdata (sys:make-typed-aref-vector nbraw))
            (data    (or dst
-                        (make-array (* nsamp nchan)
+                        (make-array (* nsamp (max 2 nchan))
                                     :element-type 'single-float)))
            (extractor (ecase bps
                         (16  (case endian
@@ -338,9 +339,11 @@
                         )))
       (lambda ()
         (read-bytes f rawdata nbraw)
+        (when (= nchan 1)
+          (fill data 0e0))
         (loop repeat nsraw
               for ix from 0 by nbs
-              for jx from 0
+              for jx from 0 by (if (= nchan 1) 2 1)
               do
               (setf (aref data jx) (funcall extractor rawdata ix)))
         data))))
