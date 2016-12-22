@@ -4,8 +4,9 @@
 (defpackage :ebu-r128
   (:use #:common-lisp)
   (:export
-   #:itu-rating
-   #:itu-ratings
+   #:r128-rating
+   #:r128-ratings
+   #:r128-album-rating
    ))
 
 #|

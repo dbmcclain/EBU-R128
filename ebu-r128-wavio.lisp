@@ -215,14 +215,32 @@
 
 ;; ------------------------------------------------
 
+#||#
 (defun find-chunk (f chunk-magic &key (endian :le))
   (let* ((magic (make-string 4)))
-    (read-sequence magic f)
-    (unless (string= magic chunk-magic)
-      (let ((offs (read-u32 f endian)))
-        (file-advance f offs)
-        (find-chunk f chunk-magic :endian endian)))
-    ))
+    (um:nlet-tail iter ()
+      (read-sequence magic f)
+      (unless (string= magic chunk-magic)
+        (let ((offs (read-u32 f endian)))
+          (incf offs (logand offs 1)) ;; get around lame proprietary tricks to throw us off by 1
+          (file-advance f offs)
+          (iter)))
+      )))
+#||#
+#|
+;; alternate to search incrementally in the dark...
+(defun find-chunk (f chunk-magic &key (endian :le))
+  (declare (ignore endian))
+  (let ((kch0 (char-code (aref chunk-magic 0))))
+    (um:nlet-tail iter ((koff  0)
+                        (kch   kch0))
+      (unless (= koff 4)
+        (if (= (read-byte f) kch)
+            (iter (1+ koff) (and (< koff 3)
+                                 (char-code (aref chunk-magic (1+ koff)))))
+          (iter 0 kch0)))
+      )))
+|#
 
 (defun read-audio-format (f &optional (endian :le))
   (let* ((dlen (read-u32 f endian))
@@ -235,7 +253,7 @@
 
 (defun get-wav-info (f fname)
   (let* ((magic (make-string 4)))
-    (file-advance f 4)
+    (file-advance f 4) ;; skip file length info
     (read-sequence magic f)
     (assert (string= magic "WAVE"))
     (find-chunk f "fmt ")
@@ -286,17 +304,69 @@
            (get-aif-info f fname))
           )))
 
+(defun escape-filename (fname)
+  (with-output-to-string (s)
+    (loop for ch across fname do
+          (cond
+           ((member ch '(#\\ #\' #\" #\& #\: #\; #\| #\! #\* #\< #\> #\space))
+            (princ #\\ s)
+            (princ ch s))
+           ((or (<= 0 (char-code ch) #x1F)
+                ;; (< #x7f (char-code ch) #x100)
+                )
+            (format s "\\~3o" (char-code ch)))
+           ((< #xff (char-code ch))
+            (format s "\\~3o\\~3o"
+                    (logand #xFF (char-code ch))  ;; are we BE or LE? try LE
+                    (ash (char-code ch) -8)
+                    ))
+           (t 
+            (princ ch s))
+           ))))
+
+(defun try-converted-wav-file (fname fn)
+  (let* ((fstr     (namestring fname))
+         (tmpfname (hcl:create-temp-file))
+         #|
+         (tmpfname (merge-pathnames (subseq fstr (1+ (position #\/ fstr
+                                                               :from-end t)))
+                                    (hcl:get-temp-directory)))
+         |#
+         (tmpstr   (namestring tmpfname)))
+
+    (unwind-protect
+        (if (zerop (sys:call-system
+                    (vector "/usr/bin/afconvert"
+                          "-v" "-f" "WAVE" "-d"
+                          "LEF32@48000"
+                          ;; "LEF32@44100"
+                          fstr
+                          tmpstr)
+                    ))
+            (with-open-file (f tmpfname
+                               :direction :input
+                               :element-type '(unsigned-byte 8))
+              (funcall fn (get-audio-info f fname)))
+          ;; else
+          (error "can't convert audio file ~A" fname))
+      (delete-file tmpfname))
+    ))
+  
 (defun do-with-open-wav-file (filename fn)
   (with-remembered-filename (fname :com.sd.wav.last-wave-file)
       (or filename
           (capi:prompt-for-file "Select input file"
-                                :filter "*.wav;*.aif;*.aiff"
+                                :filter "*.wav;*.aif;*.aiff;*.sd2;*.mp3;*.m4a;*.mp4;*.caf"
                                 :pathname fname))
     (with-open-file (f fname
                        :direction :input
                        :element-type '(unsigned-byte 8))
-      (funcall fn (get-audio-info f fname))
-      )))
+      (um:when-let (wf (get-audio-info f fname))
+        (return-from do-with-open-wav-file (funcall fn wf))
+        ))
+    ;; we reach here if we need to convert to a temp .WAV file for analysis
+    (try-converted-wav-file fname fn)
+    ))
 
 (defmacro with-wav-file ((wf &optional filename) &body body)
   `(do-with-open-wav-file ,filename
@@ -356,13 +426,16 @@
   (inspect wf))
 
 (with-wav-file (wf)
-  (let* ((data (get-wave-data wf 1024))
-         (ldata (loop for ix from 0 below 2048 by 2 collect
-                      (aref data ix)))
-         (rdata (loop for ix from 1 below 2048 by 2 collect
-                      (aref data ix))))
-    (plt:plot 'plt ldata :clear t)
-    (plt:plot 'plt rdata :color :red)))
+  (flet ((maxabs (a b)
+           (max (abs a) (abs b))))
+    (let* ((data (get-wave-data wf 1024))
+           (ldata (loop for ix from 0 below 2048 by 2 collect
+                        (aref data ix)))
+           (rdata (loop for ix from 1 below 2048 by 2 collect
+                        (aref data ix))))
+      (plt:plot 'plt ldata :clear t)
+      (plt:plot 'plt rdata :color :red)
+      (reduce #'maxabs ldata))))
   
 |#
 

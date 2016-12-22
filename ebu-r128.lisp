@@ -461,6 +461,13 @@
     (fir-init)
 
     (c-hsiir-init dcoffs)
+    
+    (let* ((ns200 (round (* 0.1 fs))) ;; 200 ms
+           (data  (make-array ns200
+                              :element-type 'single-float
+                              :initial-element 0.0))
+           (ans   (make-itu-filt-result)))
+      (itu-filt data ans)) ;; zero out FIR history
     ))
   
 (init-itu-filter 48)
@@ -523,12 +530,15 @@
                 
 ;; ------------------------------------------------
 
-(defun rmsdb (rms)
-  (+ (db10 rms)
+(defun rmsdb (pwr)
+  (+ (db10 pwr)
      *itu-db-corr*))
 
+(defun ludb (pwr)
+  (+ 23.0 (rmsdb pwr)))
+
 (defun rnd1 (v)
-  (sfloat (* 0.1 (round v 0.1))))
+  (round v 0.1))
 
 (defstruct r128-state
   fname
@@ -536,157 +546,240 @@
   (prms  0.0)
   (pk    0.0)
   (nblk    0)
-  (hist  (make-array 10000 ;; abt 2.8 hrs at 1/sec
+  (shist  (make-array 10000 ;; abt 2.8 hrs at 1/sec
                      :element-type 'single-float
                      :adjustable   t
-                     :fill-pointer 0)))
+                     :fill-pointer 0))
+  (phist  (make-array 10000 ;; abt 2.8 hrs at 1/sec
+                     :element-type 'single-float
+                     :adjustable   t
+                     :fill-pointer 0))
+  )
+
+(defstruct r128-hist
+  shist phist pl10 pl95)
+
+(defstruct r128-track
+  name tpl pl lu23 lra pr hist)
+
+(defstruct r128-album
+  artist name lu23 tracks)
+
+(defun get-artist-album (track)
+  (let* ((revdir (reverse (pathname-directory (r128-track-name track)))))
+    (values (second revdir)    ;; artist
+            (first revdir))))  ;; album
+
+(defun get-max-lu23 (tracks)
+  (loop for track in tracks maximize (r128-track-lu23 track)))
+
+;; --------------------------------------------------------------------------------
+
+(defun show-plots (data &optional (offs 0))
+  (let* ((hist   (r128-track-hist data))
+         (shist  (vops:vscale 0.1 (vops:voffset (- offs) (r128-hist-shist hist))))
+         (phist  (vops:vscale 0.1 (vops:voffset (- offs) (r128-hist-phist hist))))
+         (pl10   (* 0.1 (- (r128-hist-pl10 hist) offs)))
+         (pl95   (* 0.1 (- (r128-hist-pl95 hist) offs)))
+         (ts     (vops:vscale 1/60 (vm:framp (length shist)))))
+
+        #+:has-plotter
+        (progn
+          (plt:axes 's-record ts shist
+                    :clear t
+                    :yrange `(-18 ,(max 9 (1+ (ceiling (reduce 'max shist)))))
+                    :title  (format nil "Short Term (3s) History: Gain = ~5,1F dB" (* -0.1 offs))
+                    :xtitle "Time [mins]"
+                    :ytitle "Loudness [LU23]")
+
+          (multiple-value-bind (ys xs ign) (vm:histogram shist :binwidth 0.5)
+            (declare (ignore ign))
+            (let* ((tmax  (reduce #'max ts))
+                   (sf    (/ tmax (reduce #'max xs) 2))
+                   (xs    (vops:vscale sf xs)))
+              (plt:plot 's-record xs ys
+                        :symbol-style '(:symbol :hbars
+                                        :fill-color #(:RGB 0.016795516 0.3433715 1.0 1)
+                                        :fill-alpha 0.2))
+              ))
+
+          (plt:plot 's-record '(0 0) `(,pl10 ,pl95)
+                    :color :magenta
+                    :alpha 0.3
+                    :thick 5)
+          (plt:plot 's-record ts shist)
+          (plt:plot 's-record ts phist
+                    :color :red
+                    :alpha 0.4
+                    :thick 2)
+
+          #|
+          (plt:histogram 's-histo shist
+                         :clear t
+                         :title "Short Term (3s) Histogram"
+                         :xtitle "Loudness [LU23]"
+                         :ytitle "Counts")
+          (plt:plot 's-histo `(,pl10 ,pl95) '(0 0)
+                    :color :orange
+                    :thick 5)
+          |#
+          )
+        data))
+        
+;; --------------------------------------------------------------------------------
 
 (defun r128-summary (state)
   (with-accessors ((tp    r128-state-tp)
                    (prms  r128-state-prms)
+                   ;; (nblk  r128-state-nblk)
                    (pk    r128-state-pk)
-                   (hist  r128-state-hist)
+                   (shist r128-state-shist)
+                   (phist r128-state-phist)
                    (fname r128-state-fname)) state
 
     (destructuring-bind (p10 p95)
         (percentiles '(0.10 0.95)  ;; -20 dB rel gate
-                     (remove-if (rcurry '< (* 0.01 prms)) hist))
-      (let* ((shist (map 'vector (lambda (rss)
-                                   (+ 23.0 (rmsdb rss)))
-                         hist))
-             (p95lu (+ 23.0 (rmsdb p95)))
-             (p10lu (+ 23.0 (rmsdb p10)))
+                     (remove-if (rcurry '< (* 0.01 prms)) shist))
+      (let* ((shist (map 'vector #'ludb shist))
+             (phist (map 'vector #'ludb phist))
+             (p95lu (ludb p95))
+             (p10lu (ludb p10))
              (pl    (rmsdb prms)))
-
-        #+:has-plotter
-        (progn
-          (plt:plot 's-record shist
-                    :clear t
-                    :yrange `(-18 ,(max 9 (reduce 'max shist)))
-                    :title "Short Term (3s) History"
-                    :xtitle "Time [s]"
-                    :ytitle "Loudness [LU]")
-          (plt:plot 's-record '(0 0) `(,p10lu ,p95lu)
-                    :color :orange
-                    :thick 5)
-          (plt:histogram 's-histo shist
-                         :clear t
-                         :title "Short Term (3s) Histogram"
-                         :xtitle "Loudness [LU]"
-                         :ytitle "Counts")
-          (plt:plot 's-histo `(,p10lu ,p95lu) '(0 0)
-                    :color :orange
-                    :thick 5))
-        
-        (list
-         :file fname
-         :tpl  (rnd1 (db10 tp))
-         :pl   (rnd1 pl)
-         :lu23 (rnd1 (- pl -23.0))
-         :lra  (rnd1 (- p95lu p10lu))
-         :pr   (rnd1 (- (rmsdb pk) pl))
-         :hist shist
-         )))))
+        (show-plots (make-r128-track
+                     :name  fname
+                     :tpl   (rnd1 (db10 tp))
+                     :pl    (rnd1  pl)
+                     :lu23  (rnd1 (- pl -23.0))
+                     :lra   (rnd1 (- p95lu p10lu))
+                     :pr    (rnd1 (- (rmsdb pk) pl))
+                     :hist  (make-r128-hist
+                             :shist (map 'vector #'rnd1 shist)
+                             :phist (map 'vector #'rnd1 phist)
+                             :pl10  (rnd1 p10lu)
+                             :pl95  (rnd1 p95lu))))
+        ))))
   
+;; --------------------------------------------------------------------------------
+#|
 (defun update-r128-state (state tpl avg4 avg30 1secp)
   ;; tpl   = true peak est
   ;; avg30 = 3 sec sliding window rss
   ;; avg4  = 400 ms sliding window rss
-  (with-accessors ((tp    r128-state-tp)
-                   (prms  r128-state-prms)
+  (with-accessors ((prms  r128-state-prms)
                    (nblk  r128-state-nblk)
                    (pk    r128-state-pk)
-                   (hist  r128-state-hist)) state
-    (setf tp (max tp tpl))
+                   (phist r128-state-phist)
+                   (shist r128-state-shist)) state
+
+    (setf tp (max tp tpl)
+          pk (max pk avg30)) ;; max 3 sec level
+    
     ;; collect 3 sec windows for PR
     (when (> avg30 1e-7) ;; -70 dBFS absolute thresh
       (setf pk (max pk avg30)) ;; max 3 sec level
       (when 1secp ;; 1 sec intervals
-        (vector-push-extend avg30 hist)))
+        (vector-push-extend avg30 shist)
+        (vector-push-extend prms  phist) ))
+    
     ;; collect 400 ms windows for PL
     (when (and (> avg4 1e-7)  ;; -70 dBFS absolute thresh
                (> avg4 (* 0.1 prms))) ;; -10 dB relative thresh
       (setf prms (/ (+ avg4 (* prms nblk))
                     (incf nblk))))
     ))
+|#
+;; --------------------------------------------------------------------------------
 
 (defun accum-r128-rating (&optional fname (state (make-r128-state)))
+  ;; checked and passes minimum compliance requirements of EBU R128 3341 & 3342
+  ;; DM/RAL 12/22/16
   (declare (optimize (speed 3)
                      (safety 0)
                      (float 0)))
+  (declare (type r128-state state))
   (with-wav-file (wf fname)
     (with-accessors ((nsamp  wave-file-nsamp)
                      ;; (nch    wave-file-nchan)
                      (fsamp  wave-file-fsamp)
                      (fname  wave-file-fname)) wf
 
-      (print fname)
+      (let ((fstr  (namestring fname)))
+        (print (subseq fstr (1+ (position #\/ fstr :from-end t)))))
       (setf (r128-state-fname state) fname)
       
-      (let* ((ns100   (round (* 0.1 fsamp))) ;; 100 ms increments
-             (data    (make-array (* 2 ns100)
-                                :element-type 'single-float))
-             (rms4    (make-array 4
-                                  :element-type 'single-float
-                                  :initial-element 0.0))
+      (let* ((ns100    (round (* 0.1 fsamp))) ;; 100 ms increments
+             (data     (make-array (* 2 ns100)
+                                   :element-type 'single-float
+                                   :initial-element 0.0))
+             (rms4     (make-array 4
+                                   :element-type 'single-float
+                                   :initial-element 0.0))
              (rms4ix   0)
-             (rms30   (make-array 30
-                                  :element-type 'single-float
-                                  :initial-element 0.0))
-             (rms30ix 0)
-             (wget    (make-wave-data-getter wf ns100 :dst data))
-             (iir-ans (make-itu-filt-result)))
-        
-        ;; (assert (= nch 2)) ;; only interested in stereo music files
+             (rmsgi    (make-array 36000  ;; 1 hour window
+                                   :element-type 'single-float
+                                   :initial-element 0.0))
+             (rmsgix   0)
+             (rms30    (make-array 30
+                                   :element-type 'single-float
+                                   :initial-element 0.0))
+             (rms30ix  0)
+             (wget     (make-wave-data-getter wf ns100 :dst data))
+             (iir-ans  (make-itu-filt-result)))
+        (declare (type fixnum ns100 rms4ix rmsgix rms30ix)
+                 (type (array single-float *) data rms4 rmsgi rms30))
         (init-itu-filter (/ fsamp 1000))
-        
         (do ((ns  nsamp  (- ns ns100)))
             ((> ns100 ns))
           (itu-filt (funcall wget) iir-ans)
           (with-accessors ((rss itu-filt-result-rss)
                            (tpl itu-filt-result-tpl)) iir-ans
-            (setf (aref rms30 rms30ix)  rss
-                  rms30ix  (mod (1+ rms30ix) 30)
-                  (aref rms4 rms4ix)    rss
-                  rms4ix   (mod (1+ rms4ix)   4))
-            (update-r128-state state
-                               tpl
-                               (/ (reduce '+ rms4)   4.0) ;; 400 ms sliding window
-                               (/ (reduce '+ rms30) 30.0) ;; 3 s sliding window
-                               (zerop (mod rms30ix 10)))
-            ))
+            (with-accessors ((prms  r128-state-prms)
+                             ;; (nblk  r128-state-nblk)
+                             (tp    r128-state-tp)
+                             (pk    r128-state-pk)
+                             (phist r128-state-phist)
+                             (shist r128-state-shist)) state
+
+              (setf tp                    (max tp tpl)
+                    (aref rms4 rms4ix)    rss
+                    rms4ix                (logand (1+ rms4ix) 3))
+
+              (let* ((avg4  (/ (reduce #'+ rms4) 4)))
+                (declare (type single-float avg4))
+                
+                (setf (aref rms30 rms30ix)  avg4
+                      rms30ix               (mod (1+ rms30ix) 30)
+                      (aref rmsgi rmsgix)   avg4
+                      rmsgix                (mod (1+ rmsgix) 36000))
+                
+                (when (zerop (mod rms30ix 10)) ;; 1 sec interval?
+                  
+                  (labels ((gated-avg (gate)
+                             (declare (type single-float gate))
+                             (let* ((nel  0)
+                                    (avg  0.0))
+                               (declare (type fixnum nel)
+                                        (type single-float avg))
+                               (loop for meas of-type single-float across rmsgi
+                                     when (> meas gate)
+                                     do
+                                     (incf nel)
+                                     (incf avg meas))
+                               (if (plusp nel)
+                                   (/ avg nel)
+                                 0.0))))
+
+                    (let* ((avg30  (/ (reduce #'+ rms30) 30))
+                           (avgi   (gated-avg (* 0.1 (gated-avg 1e-7)))))
+                      (declare (type single-float avg30 avgi))
+
+                      (setf pk    (max pk avg30) ;; max 3 sec level
+                            prms  avgi)
+                    
+                      (vector-push-extend avg30  shist)
+                      (vector-push-extend avgi   phist) )))
+                ))))
         (r128-summary state) ;; provide a walking visual summary
         state
         ))))
 
-(defun get-file-collection (&optional files)
-  (let* ((files (or files
-                    (capi:prompt-for-files "Select Album Files"
-                                           :filter "*.wav;*.aif;*.aiff"
-                                           :pathname (remembered-filename :com.sd.wav.last-wave-file) ))))
-    (when files
-      (remember-filename :com.sd.wav.last-wave-file (car files)))
-    files))
-      
-(defun r128-rating (&optional file)
-  ;; obtain ratings for single audio file
-  (r128-summary (accum-r128-rating file)))
-
-(defun r128-ratings (&optional files)
-  ;; obtain a collection of ratings from several files
-  (let* ((files (get-file-collection files)))
-    (when files
-      (mapcar 'r128-rating files))
-    ))
-
-(defun r128-album-rating (&optional files)
-  ;; obtain an overall album rating for several files
-  (let* ((files (get-file-collection files)))
-    (when files
-      (let ((final (reduce (lambda (state file)
-                             (accum-r128-rating file state))
-                           files
-                           :initial-value (make-r128-state))))
-        (setf (r128-state-fname final) "Album")
-        (r128-summary final)))
-    ))

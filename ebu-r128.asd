@@ -12,6 +12,8 @@
                 (:file "ebu-r128-vmath")
                 (:file "ebu-r128-wavio")
                 (:file "ebu-fli")
-                (:file "ebu-r128"))
+                (:file "ebu-r128")
+                (:file "ebu-r128-service")
+                (:file "ebu-r128-intf"))
   :serial t
   :depends-on  ())
