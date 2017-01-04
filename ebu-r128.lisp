@@ -6,16 +6,19 @@
     (apply fn (nconc pref-args suf-args))))
 
 (defun safe-log10 (x)
-  (log (max 1e-6 (abs x)) 10))
+  (log (max 1e-20 (abs x)) 10))
 
 (defun db10 (x)
-  (* 10 (safe-log10 x)))
+  (* 10.0 (safe-log10 x)))
 
 (defun db20 (x)
-  (* 20 (safe-log10 x)))
+  (* 20.0 (safe-log10 x)))
 
 (defun sfloat (x)
   (float x 1e0))
+
+(defun ampl10 (xdb)
+  (expt 10 (* 0.1 xdb)))
 
 ;; ---------------------------------------------------
 ;; ITU K filters for loudness measurement
@@ -433,7 +436,7 @@
 ;; --------------------------------------------------------------------------
 
 (defvar *itu-filter*)
-(defvar *itu-db-corr*)
+(defvar *itu-db-corr*) ;; correction term for 1 kHz compliance through filters
 
 (defvar *itu-stateL*
   (make-array 6
@@ -446,16 +449,29 @@
               :initial-element 0e0))
 
 (defun init-itu-filter (fs)
-  (let* ((hpf    (hpf       (/ 0.0375 fs) 0.5))
-         (hsh    (hishelf 4 (/ 1.5 fs)    0.707))
-         (dcoffs (append hpf hsh))
-         (coffs  (make-array 10
-                             :element-type     'single-float
-                             :initial-contents
-                             (mapcar 'sfloat dcoffs))))
-    (setf *itu-filter* coffs
-          *itu-db-corr* (- (+ (db-filt 1 hsh fs)
-                              (db-filt 1 hpf fs))))
+  (multiple-value-bind (corr dcoffs coffs)
+      (if (= fs 48)
+          (let* ((dcoffs '(1.0d0 -2.0d0 1.0d0
+                                 1.99004745483398d0 -0.99007225036621d0
+                                 1.53512485958697d0 -2.69169618940638d0 1.19839281085285d0
+                                 1.69065929318241d0 -0.73248077421585d0))
+                 (coffs  (make-array 10
+                                     :element-type     'single-float
+                                     :initial-contents (mapcar 'sfloat dcoffs)))
+                 (corr   -0.691))
+            (values corr dcoffs coffs))
+        ;; else
+        (let* ((hpf    (hpf       (/ 0.0375 fs) 0.5))   ;; HPF at 37.5 Hz, Q = 0.5
+               (hsh    (hishelf 4 (/ 1.5 fs)    (/ (sqrt 2.0)) #|0.707|# )) ;; HiShelf at 1.5 kHz, Q = 0.707, Gain = 4 dB
+               (dcoffs (append hpf hsh))
+               (coffs  (make-array 10
+                                   :element-type     'single-float
+                                   :initial-contents (mapcar 'sfloat dcoffs)))
+               (corr   (- (+ (db-filt 1 hsh fs)
+                             (db-filt 1 hpf fs)))))
+          (values corr dcoffs coffs)) )
+    (setf *itu-filter*  coffs
+          *itu-db-corr* corr)
     (fill *itu-stateL* 0e0)
     (fill *itu-stateR* 0e0)
     (fir-init)
@@ -470,32 +486,6 @@
       (itu-filt data ans)) ;; zero out FIR history
     ))
   
-(init-itu-filter 48)
-
-(defun itu-filt1 (state v)
-  (declare (optimize (speed 3)
-                     (safety 0)
-                     (float 0)))
-  (declare (type (array single-float (6)) state)
-           (type single-float v))
-  (let ((coeffs *itu-filter*))
-    (declare (type (array single-float (10)) coeffs))
-    (labels ((filter1 (x six cix)
-               (declare (type fixnum six cix)
-                        (type single-float x))
-               (let ((y (+ (* x                      (aref coeffs (+ cix 0)))
-                           (* (aref state (+ six 0)) (aref coeffs (+ cix 1)))
-                           (* (aref state (+ six 1)) (aref coeffs (+ cix 2)))
-                           (* (aref state (+ six 2)) (aref coeffs (+ cix 3)))
-                           (* (aref state (+ six 3)) (aref coeffs (+ cix 4))))))
-                 (shiftf (aref state (+ six 1)) (aref state (+ six 0)) x)
-                 y)))
-      (let* ((y (filter1 v 0 0))
-             (z (filter1 y 2 5)))
-        (declare (type single-float y z))
-        (shiftf (aref state 5) (aref state 4) z)
-        z))))
-
 (defun itu-filt (buf ans)
   #|
   (declare (optimize (speed 3)
@@ -528,6 +518,32 @@
   (c-hsiir-eval buf (truncate (length buf) 2) ans)
   )
                 
+(defun itu-filt1 (state v)
+  (declare (optimize (speed 3)
+                     (safety 0)
+                     (float 0)))
+  (declare (type (array single-float (6)) state)
+           (type single-float v))
+  (let ((coeffs *itu-filter*))
+    (declare (type (array single-float (10)) coeffs))
+    (labels ((filter1 (x six cix)
+               (declare (type fixnum six cix)
+                        (type single-float x))
+               (let ((y (+ (* x                      (aref coeffs (+ cix 0)))
+                           (* (aref state (+ six 0)) (aref coeffs (+ cix 1)))
+                           (* (aref state (+ six 1)) (aref coeffs (+ cix 2)))
+                           (* (aref state (+ six 2)) (aref coeffs (+ cix 3)))
+                           (* (aref state (+ six 3)) (aref coeffs (+ cix 4))))))
+                 (shiftf (aref state (+ six 1)) (aref state (+ six 0)) x)
+                 y)))
+      (let* ((y (filter1 v 0 0))
+             (z (filter1 y 2 5)))
+        (declare (type single-float y z))
+        (shiftf (aref state 5) (aref state 4) z)
+        z))))
+
+(init-itu-filter 48)
+
 ;; ------------------------------------------------
 
 (defun rmsdb (pwr)
@@ -690,9 +706,12 @@
 |#
 ;; --------------------------------------------------------------------------------
 
+#|
 (defun accum-r128-rating (&optional fname (state (make-r128-state)))
-  ;; checked and passes minimum compliance requirements of EBU R128 3341 & 3342
+  ;; ********************************************************************************
+  ;; NOTE: Checked and passes minimum compliance requirements of EBU R128 3341 & 3342
   ;; DM/RAL 12/22/16
+  ;; ********************************************************************************
   (declare (optimize (speed 3)
                      (safety 0)
                      (float 0)))
@@ -782,4 +801,98 @@
         (r128-summary state) ;; provide a walking visual summary
         state
         ))))
+|#
 
+(defun accum-r128-rating (&optional fname (state (make-r128-state)))
+  ;; ********************************************************************************
+  ;; NOTE: Checked and passes minimum compliance requirements of EBU R128 3341 & 3342
+  ;; DM/RAL 01/02/2017
+  ;; ********************************************************************************
+  (declare (optimize (speed 3)
+                     (safety 0)
+                     (float 0)))
+  (declare (type r128-state state))
+  (with-wav-file (wf fname)
+    (with-accessors ((nsamp  wave-file-nsamp)
+                     ;; (nch    wave-file-nchan)
+                     (fsamp  wave-file-fsamp)
+                     (fname  wave-file-fname)) wf
+
+      (let ((fstr  (namestring fname)))
+        (print (subseq fstr (1+ (position #\/ fstr :from-end t)))))
+      (setf (r128-state-fname state) fname)
+      
+      (let* ((ns100    (round (* 0.1 fsamp))) ;; 100 ms increments
+             (data     (make-array (* 2 ns100)
+                                   :element-type 'single-float
+                                   :initial-element 0.0))
+             (rms4     (make-array 4
+                                   :element-type 'single-float
+                                   :initial-element 0.0))
+             (rms4ix   0)
+             ;;; rmsh - histogram bins for 1/10 dB intervals from -69.9 dBFS to 0 dBFS
+             (rmsh     (make-array 700
+                                   :element-type 'fixnum
+                                   :initial-element 0))
+             (rmshwts  (make-array 700
+                                   :element-type 'single-float
+                                   :initial-contents (mapcar (lambda (ix)
+                                                               (ampl10 (* -0.1 ix)))
+                                                             (um:range 0 1 700))))
+             (rms30    (make-array 30
+                                   :element-type 'single-float
+                                   :initial-element 0.0))
+             (rms30ix  0)
+             (wget     (make-wave-data-getter wf ns100 :dst data))
+             (iir-ans  (make-itu-filt-result)))
+        (declare (type fixnum ns100 rms4ix rms30ix)
+                 (type (array single-float *) data rms4 rms30 rmshwts)
+                 (type (array fixnum *) rmsh))
+        (init-itu-filter (/ fsamp 1000))
+        (do ((ns  nsamp  (- ns ns100)))
+            ((> ns100 ns))
+          (itu-filt (funcall wget) iir-ans)
+          (with-accessors ((rss itu-filt-result-rss)
+                           (tpl itu-filt-result-tpl)) iir-ans
+            (with-accessors ((prms  r128-state-prms)
+                             (tp    r128-state-tp)
+                             (pk    r128-state-pk)
+                             (phist r128-state-phist)
+                             (shist r128-state-shist)) state
+
+              (setf tp                    (max tp tpl)
+                    (aref rms4 rms4ix)    rss
+                    rms4ix                (logand (1+ rms4ix) 3))
+
+              (let* ((avg4  (/ (reduce #'+ rms4) 4)))
+                (declare (type single-float avg4))
+                
+                (setf (aref rms30 rms30ix)  avg4
+                      rms30ix               (mod (1+ rms30ix) 30))
+                (let ((ix  (round (db10 avg4) -0.1)))
+                  (declare (fixnum ix))
+                  (when (< ix 700) ;; -70 dBFS gating
+                    (incf (aref rmsh ix)))
+                  ))
+              (when (zerop (mod rms30ix 10)) ;; 1 sec interval?
+                (let* ((avg30  (/ (reduce #'+ rms30) 30))
+                       (prodw  (vops:vmul rmsh rmshwts)))
+                  (labels ((gated-avg (gate)
+                             (declare (single-float gate))
+                             (let* ((pos (position-if (um:rcurry #'< gate) rmshwts))
+                                    (num (reduce #'+ prodw :end pos))
+                                    (den (reduce #'+ rmsh  :end pos)))
+                               (if (plusp den)
+                                   (/ num den)
+                                 0.0))))
+                    (let ((avgi  (gated-avg (* 0.1 (gated-avg 0.0)))))
+                      (setf pk    (max pk avg30) ;; max 3 sec level
+                            prms  avgi)
+                    
+                      (vector-push-extend avg30  shist)
+                      (vector-push-extend avgi   phist)
+                      ))))
+              )))
+        (r128-summary state) ;; provide a walking visual summary
+        state
+        ))))
